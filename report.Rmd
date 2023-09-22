@@ -1,0 +1,67 @@
+---
+title: "Bilancia a due piatti: rapporto di calibrazione"
+short_title: "Rapporto di calibrazione"
+logo: "images/unitn_logo.pdf"
+logo_height: "1.2cm"
+author: 
+- Nome e Cognome
+date: "`r Sys.Date()`"
+company: "Università di Trento, Dipartimento di Ingegneria Industriale"
+output: memor::pdf_memo
+number_sections: true
+libertine: true
+toc: true
+lof: true
+lot: false
+header-includes:
+  - \usepackage[italian]{babel}
+---
+
+```{r setup, echo=F, include=F}
+# Caricamento librerie
+library(knitr)
+library(kableExtra)
+library(ggplot2)
+# Impostazioni output
+knitr::opts_chunk$set(
+	fig.align  = "left",        # allineamento figure
+	fig.dim    = c(5, 3) * 1.2, # rapporto larghezza/altezza e fattore di scala
+	out.height = "2.8in",       # altezza effettiva figure
+	message    = FALSE,         # sopprimi messaggi
+	warning    = FALSE,         # sopprimi warning
+	echo       = TRUE,          # mostra i codice dei chunk
+	include    = TRUE,          # mostra l'output dei chunk
+	tidy       = TRUE,          # formatta il codice dei chunk
+  tidy.opts  = list(width.cutoff=I(75)) # massima larghezza codice nei chunk
+)
+```
+
+# Descrizione dell'esperimento di calibrazione
+
+Le equazioni in linea sono scritte in questa maniera: $a=\log_2(n)$. Le equazioni numerate invece come in Eq. \ref{eq:variance}:
+
+\begin{equation}
+s^2_x=\frac{\sum_{i=1}^n(x_i-\bar x)^2}{n-1} \label{eq:variance}
+\end{equation}
+
+Invece che `\begin{equation}` e `\end{equation}` si può usare una coppia di `$$` per ottenere una equazione **non numerata**:
+
+$$
+\bar x = 1/n \sum_{i=1}^n x_i
+$$
+
+Le tabelle possono essere inserite e formattate come in Tab. \ref{tab:tab1}. I *chunk* che producono una semplice stampa di una tabella possono essere muti (cioè con `echo=FALSE`).
+
+```{r tab1}
+kable(mtcars[1:5, 1:5], booktabs = T, caption = "Una tabella poco interessante") %>%
+  kable_styling(latex_options = c("striped", "HOLD_position"), position = "left")
+```
+
+
+# Analisi
+I grafici possono essere creati in questo modo, con risultati come in Fig. \ref{fig:fig1}.
+
+```{r fig1, fig.cap="Figura di esempio"}
+ggplot(mtcars, aes(x = mpg, y = wt)) +
+  geom_point()
+```
