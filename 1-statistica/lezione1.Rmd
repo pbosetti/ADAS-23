@@ -1,0 +1,122 @@
+---
+title: "Lezione"
+author: "Paolo Bosetti"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    df_print: paged
+  html_notebook:
+    toc: yes
+    number_sections: yes
+    fig_width: 5
+    fig_height: 4
+subtitle: Introduzione ai notebook
+---
+
+# Introduzione
+
+## Basi di Markdown
+
+
+# Statistica descrittiva
+
+## Media e varianza campionaria
+
+La media e la varianza di un campione (vettore) si ottengono con le funzioni `mean()` e `var()`; la deviazione standard con `sd()`:
+
+```{r}
+v <- c(10, 14, 12, 9, 7)
+mean(v)
+var(v)
+sd(v)
+sd(v)^2
+```
+È anche possibile valutare un'espressione R in linea: la media del campione è `r mean(v)`.
+
+## Distribuzioni
+
+In R ci sono numerose funzioni correlate con le varie distribuzioni note:
+
+* `binom`: binomiale
+* `pois`: Poisson
+* `geom`: geometrica
+* `unif`: uniforme
+* `norm`: normale o gaussiana
+* `chisq`: Chi-quadro
+* `t`: T di Student
+* `f`: F di Snedecor
+
+A questi nomi va premesso un carattere per la funzione desiderata: 
+
+* `r`: generazione numeri casuali
+* `d`: PDF
+* `p`: probabilità, o CDF
+* `q`: quantile
+
+Quindi ad esempio per generare un campione di numeri casuali provenienti dalla popolazione con distribuzione uniforme tra 10 e 20:
+
+```{r}
+set.seed(0)
+runif(10, 10, 20)
+```
+
+Per la T di Student a 7 gradi di libertà:
+
+```{r}
+rt(10, 7)
+```
+
+Per studiare PDF, CDF e quantile è necessario introdurre i grafici usando la funzione `plot()`:
+
+```{r}
+s <- rnorm(100, 1, 1)
+plot(s)
+```
+
+Due vettori X e Y:
+
+```{r}
+x <- 1:100
+y <- x^2
+y2 <- 10*x+x^2
+plot(x, y, typ="l", col="red")
+lines(x, y2, col="blue")
+```
+
+Proviamo a ottenere il grafico della PDF normale:
+
+```{r}
+x <- seq(-3, 3, 0.1)
+y <- dnorm(x)
+plot(x, y, typ="l", xlab="x", ylab="Densità di probabilità", main="PDF normale")
+grid()
+```
+
+Confrontiamo la normale standard con la T di Student:
+
+```{r}
+yt <- dt(x, 7)
+plot(x,y, typ="l", col="blue")
+lines(x, yt, col="red")
+lines(x, dt(x, 30), col="green")
+```
+
+```{r}
+yn2 <- dnorm(x, 0, 0.5)
+plot(x, y, typ="l", ylim=c(0, 1), xlim=c(-2, 2))
+plot(x, y, typ="l", ylim=c(0, 1), xlim=c(-2, 2))
+lines(x, yn2, col="red")
+```
+Per esercizio, costruire i grafici della CDF e della funzione quantile delle distribuzioni Ch quadro e F di Snedecor.
+
+## Istogrammi
+
+Istogrammi:
+
+```{r}
+c <- rnorm(1000)
+hist(c, freq=F, ylim=c(0, 0.6))
+lines(x, dnorm(x))
+```
+

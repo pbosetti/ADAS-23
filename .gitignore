@@ -5,5 +5,8 @@
 
 *.pdf
 *.log
+*.html
 
 !images/*.pdf
+
+test.csv
