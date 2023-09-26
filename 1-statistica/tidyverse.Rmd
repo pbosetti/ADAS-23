@@ -98,6 +98,8 @@ Esistono le versioni *tidy* delle funzioni per leggere e scrivere file di testo:
 * `write_table()`
 * `write_fwf()`
 
+Vedere il cheatsheet qui: <https://rstudio.github.io/cheatsheets/data-import.pdf>.
+
 Consideriamo i dati disponibili su: <http://repos.dii.unitn.it:8080/data/>
 
 ```{r}
@@ -112,7 +114,12 @@ cotton <- read_table("cotton.dat", comment="#")
 cotton <- read_table("http://repos.dii.unitn.it:8080/data/cotton.dat", comment="#")
 ```
 
+
 ## Gestione di tabelle dati: `dplyr`
+
+La libreria `dplyr` consente di manipolare il contenuto di una tibble.
+
+Vedere il cheatsheet qui: <https://rstudio.github.io/cheatsheets/data-transformation.pdf>
 
 Il pacchetto tidyverse mette a disposizione la tibble `starwars` per testare l'uso delle funzioni.
 
@@ -182,6 +189,8 @@ mean(v, na.rm=T)
 
 La *data science* si basa sul concetto di strutture dati *tidy*, cioè pulite, in cui le variabili stanno sulle colonne e le osservazioni stanno sulle righe. Secondo questo criterio le tabelle tendono a essere **lunghe**: all'opposto, quando si hanno più osservazioni sulla stessa riga, le tabelle tendono a essere più **larghe**.
 
+Vedere il cheatsheet qui: <https://rstudio.github.io/cheatsheets/tidyr.pdf>.
+
 Le funzioni `pivot_longer()` e `pivot_wider()` servono per convertire tra questi due formati:
 
 ```{r}
@@ -211,10 +220,13 @@ map_dbl(1:3, function(x) sqrt(x) + 2)
 map_dbl(1:3, ~ sqrt(.) + 2)
 ```
 
+Vedere anche il cheatsheet qui: <https://rstudio.github.io/cheatsheets/purrr.pdf>.
 
 # Grafici
 
 La libreria `ggplot2` è molto più flessibile e potente delle funzioni grafiche di base.
+
+Vedere il cheatsheet qui: <https://rstudio.github.io/cheatsheets/data-visualization.pdf>.
 
 ```{r}
 tibble( # Dati in ingresso
