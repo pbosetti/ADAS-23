@@ -1,5 +1,6 @@
 ---
 title: "Lezione"
+subtitle: "Introduzione ai notebook, statistica descrittiva"
 author: "Paolo Bosetti"
 date: "`r Sys.Date()`"
 output:
@@ -14,7 +15,6 @@ output:
   html_document:
     toc: yes
     df_print: paged
-subtitle: Introduzione ai notebook
 ---
 
 # Introduzione
@@ -51,7 +51,7 @@ Gli apici e i pedici si creano con `^` e `_`, rispettivamente. Se in apice o ped
 $$
 x_{ij} = \mu + \tau_i + \epsilon_{ij} 
 $$
-Come si vede, le lettere greche si ottengono anteponendo `\` al nome della lettera. Si noti che per la lettera epsilon esistono due varianti tipografiche: $\epsilon$ e $\varepsilon$; per i indicare i residui si preferisce di solito la seconda.
+Come si vede, le lettere greche si ottengono anteponendo `\` al nome della lettera. Si noti che per la lettera epsilon esistono due varianti tipografiche: $\epsilon$ (`\epsilon`) e $\varepsilon$ (`\varepsilon`); per i indicare i residui si preferisce di solito la seconda.
 
 Le sommatorie e gli integrali si ottengono con `\sum` e `\int`, rispettivamente:
 
