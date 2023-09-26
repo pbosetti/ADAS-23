@@ -3,14 +3,17 @@ title: "Lezione"
 author: "Paolo Bosetti"
 date: "`r Sys.Date()`"
 output:
-  html_document:
+  pdf_document: 
     toc: yes
-    df_print: paged
+    number_sections: yes
   html_notebook:
     toc: yes
     number_sections: yes
     fig_width: 5
     fig_height: 4
+  html_document:
+    toc: yes
+    df_print: paged
 subtitle: Introduzione ai notebook
 ---
 
@@ -30,9 +33,9 @@ I nuovi paragrafi iniziano dopo una riga vuota. Un elenco puntato si ottiene:
 
 Un *hyperlink* può essere inserito [in questo modo](https://paolobosetti.quarto.pub/adas-1). È possibile anche inserire link a capitoli del documento: [Distribuzioni](#distribuzioni) (il nome della sezione è come il titolo, preceduto da #, tutto minuscolo e sostituendo gli spazi con un trattino).
 
-## Equazioni in $\LaTeX$
+## Equazioni in LaTeX
 
-In breve, le equazioni in $\LaTeX$ possono essere inserite sia in linea, come questa: $a=b+c$, che separatemente dal testo, in questo modo:
+In breve, le equazioni in LaTeX possono essere inserite sia in linea, come questa: $a=b+c$, che separatemente dal testo, in questo modo:
 
 $$
 a = b + c
@@ -64,12 +67,11 @@ Si noti che il carattere `~` indica uno spazio.
 
 Per ottenere più equazioni allineate in un blocco si usa l'ambiente `align`:
 
-$$
 \begin{align}
 f^-(x) &= \int_{-\infty}^x f(\xi) d\xi \\
 f^+(x) &= \int_x^{+\infty} f(\xi) d\xi;
 \end{align}
-$$
+
 Dove ogni linea eccetto l'ultima deve terminare con un doppio *backslash* e il carattere `&` indica il punto di allineamento.
 
 Infine, i nomi delle funzioni più comuni (trigonometriche, esponenziali, ...) devono essere preceduti da una backslash, perché scrivere $\sin(x)$ non è come scrivere $sin(x)$ (quest'ultimo è il prodotto delle quattro variabili $s$, $i$, $n$ e $x$).
