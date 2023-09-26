@@ -1,20 +1,22 @@
 ---
 title: "Lezione"
-subtitle: "Introduzione ai notebook, statistica descrittiva"
 author: "Paolo Bosetti"
 date: "`r Sys.Date()`"
 output:
-  pdf_document:
+  word_document:
     toc: yes
-    number_sections: yes
+  html_document:
+    toc: yes
+    df_print: paged
   html_notebook:
     toc: yes
     number_sections: yes
     fig_width: 5
     fig_height: 4
-  html_document:
+  pdf_document:
     toc: yes
-    df_print: paged
+    number_sections: yes
+subtitle: Introduzione ai notebook, statistica descrittiva
 ---
 
 # Introduzione
@@ -217,4 +219,44 @@ c <- rnorm(1000)
 hist(c, freq=F, ylim=c(0, 0.6))
 lines(x, dnorm(x))
 ```
+
+È utile anche la *empirical cumulative distribution function*, ECDF.
+
+```{r}
+x <- seq(-3, 3, 0.1)
+s <- rnorm(100)
+plot(ecdf(s))
+lines(x, pnorm(x), col="red")
+```
+I quantili di un campione possono essere calcolati con la funzione `quantile()`:
+
+```{r}
+quantile(s, probs=seq(0,1,1/3))
+plot(ecdf(s))
+lines(x, pnorm(x), col="red")
+abline(v=quantile(s), col="green", lty=2)
+```
+
+Plot di un data frame:
+
+```{r}
+df <- data.frame(
+  x = x,
+  y = rnorm(length(x)),
+  y2 = rnorm(length(x), 1, 0.5)
+)
+head(df)
+```
+Grafico:
+
+```{r}
+plot(y~x, data=df)
+points(y2~x, data=df, col="red")
+```
+
+# Statistica inferenziale
+
+
+## Test di Student
+
 
