@@ -3,7 +3,7 @@ title: "Lezione"
 author: "Paolo Bosetti"
 date: "`r Sys.Date()`"
 output:
-  pdf_document: 
+  pdf_document:
     toc: yes
     number_sections: yes
   html_notebook:
@@ -75,6 +75,21 @@ f^+(x) &= \int_x^{+\infty} f(\xi) d\xi;
 Dove ogni linea eccetto l'ultima deve terminare con un doppio *backslash* e il carattere `&` indica il punto di allineamento.
 
 Infine, i nomi delle funzioni più comuni (trigonometriche, esponenziali, ...) devono essere preceduti da una backslash, perché scrivere $\sin(x)$ non è come scrivere $sin(x)$ (quest'ultimo è il prodotto delle quattro variabili $s$, $i$, $n$ e $x$).
+
+## Differenze tra *Preview* e *Knit*
+
+La compilazione del notebook può essere eseguita in modalità
+
+* *Preview*: genera un HTML
+* *Knit*: genera, a scelta, un HTML, un PDF o un file MSWord
+
+La modalità *Preview* utilizza l'output dei chunk R già valutati nella sessione del notebook. Ciò significa che se un particolare chunk non è stato eseguito (e non ha quindi generato output), il documento HTML prodotto non conterrà il grafico o il testo risultante dal chunk in questione. Quindi, prima di aggiornare la *preview* è opportuno ri-eseguire tutti i chunk (comando *Run All*). In altre parole, gli oggetti R che compaiono nell'output sono gli stessi elencati nell'environment,
+
+La modalità *Knit*, invece, esegue automaticamente tutti i chunk ad ogni generazione dell'output, e lo fa **in una sessione di R separata**, con il suo proprio environment che viene distrutto a generazione terminata.
+
+Quindi, con *Knit* si è sempre sicuri che l'output sia sincronizzato con il codice, anche se per documenti lunghi la generazione può richiedere più tempo. 
+
+Con *Preview*, invece, la generazione è più rapida (ma si ottiene solo HTML), però è accurata solo durante la stesura del documento, quando ogni chunk è eseguito mano a mano che lo si completa.
 
 # Statistica descrittiva
 
@@ -185,7 +200,17 @@ Per esercizio, costruire i grafici della CDF e della funzione quantile delle dis
 
 ## Istogrammi
 
-Istogrammi:
+L'istogramma di un campione si ottiene con la funzione `hist()`. Confrontiamo l'istogramma di un campione normale di 1000 elementi con la PDF della relativa distribuzione:
+
+```{r}
+c <- rnorm(1000)
+hist(c)
+lines(x, dnorm(x))
+```
+Come mai la PDF non è visibile? il massimo della funzione è `max(rnorm(x)) = ` `r max(rnorm(x))`, cioè è troppo bassa per essere osservabile sulla scala verticale.
+
+Per confrontare un istiogramma con la sua distribuzione dobbiamo specificare che sulla scala verticale vogliamo la **densità** anziché la **frequenza** (la densità è la frequenza divisa per la larghezza di ciascun *bin*):
+
 
 ```{r}
 c <- rnorm(1000)
