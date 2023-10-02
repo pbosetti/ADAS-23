@@ -1,0 +1,102 @@
+---
+title: "Statistica inferenziale"
+author: "Paolo Bosetti"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+
+# Test di Student
+
+## Due lati, due campioni
+
+Creiamo due campioni `s1`e `s2` a partire dalla distribuzione normale. I due campioni avranno dimensioni differenti e saranno estratto da popolazioni con valori attesi e varianze *leggermente* differenti:
+
+```{r}
+set.seed(321)
+
+m <- c(10.1, 10.15)
+s <- c(0.2, 0.1)
+n <- c(10, 14)
+
+s1 <- rnorm(n[1], m[1], s[1])
+s2 <- rnorm(n[2], m[2], s[2])
+```
+
+Possiamo riportare i dati in un grafico a dispersione:
+
+```{r}
+ggplot() +
+  geom_point(aes(x=1:n[1], y=s1, color="S1")) +
+  geom_point(aes(x=1:n[2], y=s2, color="S2")) +
+  geom_hline(aes(color="S1", yintercept=mean(s1))) +
+  geom_hline(aes(color="S2", yintercept=mean(s2)))
+```
+
+Osserviamo che i due campioni sono effettivamente molto vicini, relativamente alla loro dispersione. È quindi lecito verificare le ipotesi che le medie delle popolazioni di origine siano uguali oppure diverse mediante un test di Student.
+
+Ricordiamo che esistono due versioni del test di Student, a seconda del fatto che si possa assumere che i campioni siano **omoschedastici** (test di Student puro) o no (test di Welch).
+
+Quindi verifichiamo prima la varianza con la funzione `var.test()`:
+
+```{r}
+(vt <- var.test(s1, s2))
+```
+
+Il *p*-value risultante è `r (vt$p.value * 100) %>% round(1)`, troppo grande per rifiutare l'ipotesi nulla con tranquillità, quindi deduciamo che i due campioni provengono da popolazioni con la stessa varianza. Quindi il successivo test di Student può essere di tipo standard.^[In realtà, dato che i dati li abbiamo generati noi, sappiamo che le due popolazioni **non hanno** la stessa varianza, che è `r s[1]` per `s1` e `r s[2]` per `s2`: il test della varianza ci dice---più correttamente---che non abbiamo sufficienti evidenze statistiche per rifiutare l'ipotesi di omoschedasticità.]
+
+In genere si pone una soglia $\alpha=0.05$ per rigettare l'ipotesi nulla: ogni *p*-value inferiore a tale soglia significa che si accetta l'ipotesi alternativa. Il valore di $\alpha$ dipende dal rischio associato ad un'errata inferenza.
+
+Si noti che la fiunzione `var.test()` (come tutte le altre funzioni di test che vedremo) **stampa un'analisi esplicita** e ritorna **un oggetto** che contiene tutti i valori alla base dell'analisi, accessibili con la notazione `$` (ad esempio `vt$p.value`).
+
+Effettuiamo quindi il test di Student, impostando il parametro `var.equal` al confronto tra il *p*-value del test della varianza con un $\alpha=0.05$
+
+```{r}
+(tt <- t.test(s1, s2, 
+       var.equal=(vt$p.value>=0.05), 
+       mu=0,
+       conf.level=0.95))
+```
+Il T-test riporta le seguenti informazioni notevoli:
+
+* la statistica di test $t_0=`r tt$statistic`$
+* i gradi di libertà $n_1+n_2-2=`r sum(n)-2`$
+* il *p*-value `r tt$p.value`
+* i limiti dell'intervallo di confidenza
+
+La coppia di ipotesi effettivamente verificate è:
+
+\begin{align*}
+H_0 &: \mu_1-\mu_2 = \mu_0 \\
+H_1 &: \mu_1-\mu_2 \neq \mu_0
+\end{align*}
+dove $\mu_0$ è il parametro `mu=0` usato nella funzione `t.test()`.
+
+Come detto sopra, solo un *p*-value piccolo (solitamente almeno minore di 0.05) ci consente di rigettare $H_0$.
+
+L'intervallo di confidenza **è calcolato relativamente a $\mu_0$**: se il valore di `mu`risulta interno all'intervallo, allora si accetta $H_0$ con il livello di confidenza assegnato (`conf.level`, default a 0.95), e viceversa.
+
+
+## Box-plot
+
+L'equivalente grafico del test di Student è il confronto mediante un box-plot. Quest'ultimo si può ottenere in `ggplot` mediante la geometria `geom_boxplot`, che vuole due estetiche:
+
+* `x`, considerata come la chiave con cui raggruppare i campioni
+* `y`, considerata come il nome del parametro valore
+
+È quindi anzitutto necessario rappresentare i dati in formato *tidy*, cioè come una tabella in cui il numero del campione è nella colonna `sample` e il valore misurato nella colonna `value`:
+
+```{r}
+tibble(
+  sample = factor(c(rep(1, n[1]), rep(2, n[2]))),
+  value = c(s1, s2)
+) %>% 
+  ggplot(aes(x=sample, y=value)) +
+  geom_boxplot()
+```
+

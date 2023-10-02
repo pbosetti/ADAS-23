@@ -6,6 +6,7 @@
 *.pdf
 *.log
 *.html
+*.docx
 
 !images/*.pdf
 
