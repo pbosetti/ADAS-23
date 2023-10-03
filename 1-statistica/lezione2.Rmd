@@ -1,13 +1,21 @@
 ---
 title: "Statistica inferenziale"
+subtitle: "Analisi Dati e Statistica, A.A. 2023--24"
 author: "Paolo Bosetti"
 date: "`r Sys.Date()`"
-output: pdf_document
+output: 
+  pdf_document: 
+    toc: no
+    fig_width: 5
+    fig_height: 3
+    number_sections: yes
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
+library(glue)
+library(outliers)
 ```
 
 
@@ -20,7 +28,7 @@ Creiamo due campioni `s1`e `s2` a partire dalla distribuzione normale. I due cam
 ```{r}
 set.seed(321)
 
-m <- c(10.1, 10.15)
+m <- c(10.1, 10.2)
 s <- c(0.2, 0.1)
 n <- c(10, 14)
 
@@ -82,6 +90,16 @@ Come detto sopra, solo un *p*-value piccolo (solitamente almeno minore di 0.05) 
 L'intervallo di confidenza **è calcolato relativamente a $\mu_0$**: se il valore di `mu`risulta interno all'intervallo, allora si accetta $H_0$ con il livello di confidenza assegnato (`conf.level`, default a 0.95), e viceversa.
 
 
+
+```{r}
+t.test(s1, s2, 
+       var.equal=(vt$p.value>=0.05), 
+       mu=0,
+       alternative = "less",
+       conf.level=0.95)
+```
+
+
 ## Box-plot
 
 L'equivalente grafico del test di Student è il confronto mediante un box-plot. Quest'ultimo si può ottenere in `ggplot` mediante la geometria `geom_boxplot`, che vuole due estetiche:
@@ -93,10 +111,302 @@ L'equivalente grafico del test di Student è il confronto mediante un box-plot. 
 
 ```{r}
 tibble(
-  sample = factor(c(rep(1, n[1]), rep(2, n[2]))),
+  sample = factor(c(rep("a", n[1]), rep("b", n[2]))),
   value = c(s1, s2)
 ) %>% 
   ggplot(aes(x=sample, y=value)) +
+  geom_boxplot(varwidth=T)
+```
+
+# Anomalie
+
+##Criterio di Chauvenet
+
+Il criterio di Chauvenet non è disponibile in R, ma è facile costruire una funzione che lo implementi:
+
+```{r}
+chauvenet <- function(x, threshold=0.5) {
+  abs.diff <- abs(x-mean(x)) / sd(x)
+  s0 <- max(abs.diff)
+  # which.max restituisce l'indice dell'elemento col massimo valore
+  i0 <- which.max(abs.diff)
+  freq <- length(x) * pnorm(s0, lower.tail = F) # n*P_s
+  result <- list(s0 = s0, 
+                 index = i0, 
+                 value = x[i0], 
+                 reject = freq < threshold)
+  # la riga seguente prende il NOME dell'argomento x (invece che il valore)
+  samp <- deparse(substitute(x))
+  print(glue("Chauvenet's criterion for sample {samp}"))
+  print(glue("Suspect outlier: {samp}[{i0}] = {x[i0]}, s0 = {s0}"))
+  print(glue("Expected frequency: {freq}, threshold: {threshold}"))
+  print(glue("Decision: {d}", d=ifelse(result$reject, "reject it", "keep it")))
+    
+  invisible(result)
+}
+
+ch1 <- chauvenet(s1)
+ch2 <- chauvenet(s2)
+```
+Si noti l'uso di `invisible()` al posto di `return()`: in questo modo l'oggetto `result` è restituito in modo invisibile, cioè non viene normalmente stampato ma può essere assegnato a una variabile.
+
+Vediamo come rimuovere le anomalie, lavorando su una coppia di `s1` e `s2` perché successivamente li utilizzeremo nella loro forma originale.
+
+Procediamo sostituendo le anomalie con `NA`:
+
+```{r}
+s1_c <- s1
+s2_c <- s2
+
+if (ch1$reject) s1_c[ch1$index] <- NA
+if (ch2$reject) s2_c[ch2$index] <- NA
+
+s1
+s2
+```
+Ora possiamo ripetere il box-plot, dopo aver rimosso tutti gli `NA` con la funzione `na.omit()`:
+
+```{r}
+tibble(
+  sample = factor(c(rep("a", n[1]), rep("b", n[2]))),
+  value = c(s1_c, s2_c)
+) %>% 
+  na.omit() %>% 
+  ggplot(aes(x=sample, y=value)) +
+  geom_boxplot(varwidth=T)
+```
+
+
+## Test di Grubb
+
+Il test di Grubb è un'evoluzione del criterio di Chauvenet, col vantaggio di essere un vero e proprio test statistico, che fornisce un *p*-value. L'ipotesi nulla è che il punto più lontano dalla media **non sia** un'anomalia: 
+
+```{r}
+(gt <- grubbs.test(s1))
+```
+Si noti che il test non fornisce l'indice né il valore del punto anomalo, che va quindi identificato manualmente o semplicemente con:
+```{r}
+which.max((s1-mean(s1)))
+```
+
+# Controllo di normalità
+
+Il test di Student è basato sull'ipotesi che i due campioni siano **indipendenti**. Quest'ipotesi può essere verificata mediante la correlazione o i test di correlazione.
+
+Lo stesso test e molti altri test che abbiamo visto e vedremo sono basati sull'assunzione di normalità del campione o dei residui. Quest'ipotesi può essere verificata con un metodo grafico o con due test statistici.
+
+## Verifica correlazione
+
+Se due campioni non sono correlati, il grafico di uno contro l'altro mostra una nuvola senza tendenze particolari. Viceversa, se c'è correlazione la nuvola appare allungata:
+
+```{r}
+set.seed(0)
+N <- 50
+df <- tibble(
+  s1 = rnorm(N, 3, 1),
+  s2 = rnorm(N, 5, 1),
+  s3 = 2 + s1 + rnorm(N, 0, 0.5)
+) 
+
+df %>% ggplot(aes(x=s1, y=s2)) +
+  geom_point() +
+  geom_point(aes(y=s3), color="red")
+```
+
+Quantitativamente possiamo calcolare la covarianza e la correlazione:
+
+```{r}
+cov(df$s1, df$s2)
+cov(df$s1, df$s3)
+
+cor(df$s1, df$s2)
+cor(df$s1, df$s3)
+```
+
+Inoltre, R dispone anche di un test di correlazione, con ipotesi nulla di non-correlazione:
+
+```{r}
+cor.test(df$s1, df$s2)
+```
+
+
+```{r}
+cor.test(df$s1, df$s3)
+```
+## Grafico Quantile-Quantile
+
+Vediamo anzitutto come si costruisce il diagramma quantile-quantile:
+
+```{r}
+N <- 10
+tibble(
+  i = 1:N,
+  x = sort(rnorm(N, 10, 2)),
+  f = (i - 3/8)/(N + 1 -3/4),
+  q = qnorm(f)
+) %>% 
+  ggplot(aes(x=q, y=x)) +
+  geom_point() +
+  geom_abline()
+```
+**Esercizio**: aggiungere la linea diagonale che passa per il primo e il terzo quartile.
+
+La libreria `ggplot2` dispone di una funzione apposita per generare direttamente il Q-Q plot. Facciamolo a partire da una tabella *tidy* e vedendo come usare l'estetica `group` per raggruppare due campioni diversi nello stesso grafico:
+
+```{r}
+N <- 200
+set.seed(123)
+df <- tibble(
+  sn = rnorm(N, 10, 2),
+  su = runif(N, 8, 12)
+) %>% 
+  pivot_longer(everything(), names_to = "sample", values_to = "value")
+
+df %>% ggplot(aes(sample=value, group=sample, color=sample)) +
+  geom_qq() +
+  geom_qq_line() +
+  labs(title="Confronto tra distribuzioni", x="Quantili teorici", y="Quantili campionari", color="Campioni")
+
+```
+
+## Test del Chi-quadro
+
+Costruiamo il test secondo la teoria. Nota l'uso delle funzioni `qnorm()`, `cut()` e `tabulate()`:
+
+```{r}
+set.seed(0)
+N <- 100
+sample <- runif(N, 8, 12)
+
+k <- floor(N/5)
+m <- mean(sample)
+s <- sd(sample)
+
+breaks <- qnorm(seq(0, 1, length.out=k+1), m, s)
+
+O <- sample %>% cut(breaks = breaks) %>% tabulate()
+E <- N/length(O)
+
+X0 <- sum((O-E)^2/E)
+X0
+(p <- pchisq(X0, k-2-1, lower.tail = F))
+```
+R dispone di una funzione `chisq.test()`, ma non è adatta al test di normalità, infatti fornisce un risultato differente:
+
+```{r}
+chisq.test(sample)
+```
+L'errore sta nel calcolo dei gradi di libertà.
+
+La funzione `chisq.test()` serve in realtà ad un altro scopo, cioè l'analisi di correlazione in tabelle di contingenza.
+
+Supponiamo di avere i dati che riportano quanti pezzi di una linea sono lavorati da uno di due operatori su ciascuna di tre macchine:
+
+```{r}
+set.seed(0)
+df <- tibble(
+  operatore = sample(2, 500, replace=T, prob=c(2,1)),
+  macchina = sample(3, 500, replace=T, prob=c(3, 2.5, 1))
+) %>% 
+  mutate(operatore=factor(operatore), macchina=factor(macchina))
+```
+
+
+La tabella di contingenza mostra l'incidenza delle osservazione sulle due variabili categoriche:
+
+```{r}
+df %>% table()
+```
+
+Il test del Chi-quadro verifica l'ipotesi nulla che le due variabili categoriche siano indipendenti:
+
+```{r}
+chisq.test(table(df))
+```
+Verifichiamo l'opposto con una altra tabella di contingenza creata ad arte:
+
+```{r}
+m <- matrix(c(160, 140, 40, 40, 60, 60), nrow=2, byrow=T)
+dimnames(m) <- list(operatore=1:2, macchina=1:3)
+m
+```
+
+```{r}
+chisq.test(m)
+```
+
+## Test di Shapiro-Wilk
+
+Il test di normalità più potente è quello di Shapiro-Wilk. È sempre opportuno accompagnarlo con un'analisi grafica dei dati (es. Q-Q plot):
+
+```{r}
+shapiro.test(rnorm(20))
+```
+
+# Analisi della varianza (ANOVA)
+
+Consideriamo le prove a trazione su filati con diversi percentuali di cotone:
+
+```{r}
+df <- read.table("cotton.dat", header = T, sep="\t", comment.char = "#") %>% 
+  tibble() %>% 
+  mutate(Cotton=factor(Cotton))
+df
+```
+
+```{r}
+df %>% ggplot(aes(x=Cotton, y=Strength)) +
   geom_boxplot()
+```
+L'analisi della varianza parte dalla definizione di un **modello lineare** che correla la resa (output) con il fattore in ingresso (input) mediante una **formula R**:
+
+```{r}
+df.lm <- lm(Strength~Cotton, data=df)
+anova(df.lm)
+```
+È sempre necessario verificare la normalità dei residui:
+
+```{r}
+shapiro.test(df.lm$residuals)
+```
+Esiste anche una differente interfaccia, più vecchia, per il calcolo della tabella ANOVA mediante la funzione `aov()`:
+
+```{r}
+summary(aov(Strength~Cotton, data=df))
+```
+
+
+
+## Test di Tukey
+
+La stessa funzione `aov()` è utilizzata per realizzare il test di Tukey:
+
+```{r}
+plot(TukeyHSD(aov(Strength~Cotton, data=df), conf.level=0.99))
+```
+**Esercizio**: realizzare lo stesso grafico con `ggplot` invece che con `plot`.
+
+## ANOVA a due vie
+
+Consideriamo un esperimento che misura la vita di una batteria al variare della temperatura di esercizio e del tipo di elettrolita utilizzato all'interbno della batteria stessa:
+
+```{r}
+df <- read.table("http://repos.dii.unitn.it:8080/data/battery.dat", comment="#", header = T) %>% 
+  mutate(
+    Temperature=factor(Temperature),
+    Material=factor(Material)
+  )
+
+df
+```
+
+Il modello lineare deve essere costruito prendendo in considerazione i due fattori **e anche la loro interazione**. Si noti l'algebra delle formule R:
+
+```{r}
+df.lm <- lm(Response~Temperature + Material + Temperature:Material, data=df)
+# equivalente a:
+df.lm <- lm(Response ~ Temperature*Material, data=df)
+
+anova(df.lm)
 ```
 
