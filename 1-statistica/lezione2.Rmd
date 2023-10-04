@@ -388,7 +388,7 @@ plot(TukeyHSD(aov(Strength~Cotton, data=df), conf.level=0.99))
 
 ## ANOVA a due vie
 
-Consideriamo un esperimento che misura la vita di una batteria al variare della temperatura di esercizio e del tipo di elettrolita utilizzato all'interbno della batteria stessa:
+Consideriamo un esperimento che misura la vita di una batteria al variare della temperatura di esercizio e del tipo di elettrolita utilizzato all'interno della batteria stessa:
 
 ```{r}
 df <- read.table("http://repos.dii.unitn.it:8080/data/battery.dat", comment="#", header = T) %>% 
