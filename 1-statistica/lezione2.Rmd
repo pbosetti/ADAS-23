@@ -239,17 +239,43 @@ Vediamo anzitutto come si costruisce il diagramma quantile-quantile:
 
 ```{r}
 N <- 10
-tibble(
+df <- tibble(
   i = 1:N,
   x = sort(rnorm(N, 10, 2)),
   f = (i - 3/8)/(N + 1 -3/4),
   q = qnorm(f)
-) %>% 
+) 
+plot <- df %>% 
   ggplot(aes(x=q, y=x)) +
   geom_point() +
   geom_abline()
+plot
 ```
 **Esercizio**: aggiungere la linea diagonale che passa per il primo e il terzo quartile.
+
+**Soluzione**:
+
+```{r}
+# Calcolo i quantili teorici e campionari di 0.25 e 0.75
+ql <- tibble(
+  p = c(1,3)/4,
+  sq = quantile(df$x, p),
+  tq = qnorm(p)
+)
+# Equazione della retta y=ax+b: a=(y2-y1)/(x2-x1), b=y1-ax1
+a <- with(ql, (sq[2] - sq[1]) / (tq[2] - tq[1]))
+b <- with(ql, sq[1] - a * tq[1])
+# Aggungo al grafico i due punti corrispondenti ai quantili e la retta passante
+plot +
+  geom_point(aes(x=tq, y=sq), ql, shape=4, size=4, stroke=2, color="red") +
+  geom_abline(aes(slope=a, intercept=b), color="red")
+
+# Confronto con le funzioni geom_qq()
+df %>% ggplot(aes(sample=x)) +
+  geom_qq() +
+  geom_qq_line()
+```
+
 
 La libreria `ggplot2` dispone di una funzione apposita per generare direttamente il Q-Q plot. Facciamolo a partire da una tabella *tidy* e vedendo come usare l'estetica `group` per raggruppare due campioni diversi nello stesso grafico:
 
@@ -382,19 +408,40 @@ summary(aov(Strength~Cotton, data=df))
 La stessa funzione `aov()` è utilizzata per realizzare il test di Tukey:
 
 ```{r}
-plot(TukeyHSD(aov(Strength~Cotton, data=df), conf.level=0.99))
+df.tuk <- TukeyHSD(aov(Strength~Cotton, data=df), conf.level=0.99)
+plot(df.tuk)
 ```
 **Esercizio**: realizzare lo stesso grafico con `ggplot` invece che con `plot`.
+
+**Soluzione**:
+Uso `attributes(df.tuk)` per scoprire il contenuto dell'oggetto. Il campo `$Cotton` è una matrice che posso utilizzare per il grafico. Le etichette delle differenze sono disponibili come nomi di riga: posso estrarne il vettore con `rownames(df.tuk$Cotton)`.
+Inoltre, se vogliamo che il grafico rispetti lo stesso ordine delle coppie come nel plot originale, dobbiamo definire un campo `pair` come fattore ordinato, usando come ordine dei livelli lo stesso restituito da `rownames(df.tuk$Cotton)` (in caso contrario, ggplot riordina le coordinate qualitative secondo l'ordine alfabetico).
+
+```{r}
+df.tuk$Cotton %>% 
+  as_tibble(rownames=NA) %>% # rownames=NA significa "mantieni i numeri di riga"
+  mutate(
+    # ricordare che . significa l'oggetto ricevuto dalla pipe
+    pair=factor(rownames(.), ordered = T, levels=rev(rownames(.))), 
+    reject=`p adj` < 0.01, # nomi di colonne con spazio vanno messi tra backtick
+  ) %>% 
+  ggplot(aes(x=pair, y=diff, color=reject)) +
+  geom_errorbar(aes(ymin=lwr, ymax=upr)) +
+  geom_point() +
+  geom_hline(yintercept = 0, linetype=2) +
+  coord_flip()
+```
+
 
 ## ANOVA a due vie
 
 Consideriamo un esperimento che misura la vita di una batteria al variare della temperatura di esercizio e del tipo di elettrolita utilizzato all'interno della batteria stessa:
 
 ```{r}
-df <- read.table("http://repos.dii.unitn.it:8080/data/battery.dat", comment="#", header = T) %>% 
+df <- read.table("http://repos.dii.unitn.it:8080/data/battery.dat", comment="#", header = T) %>%
   mutate(
     Temperature=factor(Temperature),
-    Material=factor(Material)
+    Material=factor(LETTERS[Material])
   )
 
 df
@@ -403,10 +450,85 @@ df
 Il modello lineare deve essere costruito prendendo in considerazione i due fattori **e anche la loro interazione**. Si noti l'algebra delle formule R:
 
 ```{r}
-df.lm <- lm(Response~Temperature + Material + Temperature:Material, data=df)
+df.lm <- lm(Response ~ Temperature + Material + Temperature:Material, data=df)
 # equivalente a:
 df.lm <- lm(Response ~ Temperature*Material, data=df)
-
-anova(df.lm)
 ```
 
+La formula `Response ~ Temperature * Material` corrisponde al modello analitico:
+$$
+y_{ijk} = \mu + \alpha_i + \beta_j + (\alpha\beta)_{ij} + \varepsilon_{ijk} = \hat y_{ij} + \varepsilon_{ijk}
+$$
+
+Otteniamo l'analisi della varianza per il modello `df.lm`:
+
+```{r}
+anova(df.lm)
+```
+Da cui risultano essere significativi sia gli effetti dei fattori che la loro interazione.
+
+
+## Analisi di adeguatezza del modello (MAC)
+
+Ogni analisi successiva è possibili solo dopo aver verificato l'adeguatezza del modello `df.lm` mediante un'analisi dei residui. È necessario verificare che:
+
+* i residui siano distribuiti normalmente
+* i residui non mostrino *pattern* (andamenti) nei confronti dell'ordine di acquisizione delle misure né nei confronti dei singoli fattori
+
+La normalità può essere verificata col test di Shapiro, che risulta negativo (cioè non ci sono motivi per sostenere che i residui **non siano normali**), e mediante un grafico Q-Q:
+
+```{r}
+shapiro.test(df.lm$residuals)
+```
+```{r}
+tibble(
+  residuals = df.lm$residuals
+) %>% 
+  ggplot(aes(sample=residuals)) +
+  geom_qq() + 
+  geom_qq_line()
+```
+
+L'assenza di *pattern* è verificata con metodi grafici:
+
+```{r}
+df$residuals <- df.lm$residuals
+df %>% ggplot(aes(x=RunOrder, y=residuals)) + 
+  geom_point()
+```
+
+**Esercizio**: usando il *cheatsheet*,  modificare df con le funzioni di `dplyr` aggiungendo la colonna dei residui.
+
+```{r}
+df %>% ggplot(aes(x=Temperature, y=residuals)) + 
+  geom_point()
+df %>% ggplot(aes(x=Material, y=residuals)) + 
+  geom_point()
+```
+
+Non osserviamo particolari andamenti quindi possiamo accettare il modello rappresentato da `df.lm`.
+
+
+## Grafici di interazione
+
+Possiamo ora studiare l'interazione tra i due fattori mediante un *interaction plot*.
+
+```{r}
+df.plot1 <- df %>% 
+  group_by(Temperature, Material) %>% 
+  summarise(Response=mean(Response), .groups="keep") %>% 
+  ggplot(aes(y=Response, x=Temperature, group=Material, color=Material)) + 
+  geom_line() +
+  geom_point()
+
+df.plot1
+```
+
+Se aggiungiamo anche i punti sperimentali, è evidente quanto essi siano sovrapposti e quanto ogni conclusione in merito possa essere presa solo dopo aver verificato la significatività con metodi statistici: mediante ANOVA in generale e mediante, ad esempio, un test di Tukey per i particolari livelli.
+
+```{r}
+df.plot1 +
+  geom_point(data=df, aes(x=Temperature, y=Response))
+```
+
+**Esercizio**: Usare un test di Tukey (in realtà tre) per verificare quali valori di risposta sono statisticamente significativi ai diversi livelli di temperatura
