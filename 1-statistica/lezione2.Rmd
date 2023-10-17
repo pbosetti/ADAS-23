@@ -247,12 +247,23 @@ df <- tibble(
 ) 
 plot <- df %>% 
   ggplot(aes(x=q, y=x)) +
-  geom_point() +
-  geom_abline()
+  geom_point() 
 plot
 ```
 **Esercizio**: aggiungere la linea diagonale che passa per il primo e il terzo quartile.
 
+```{r}
+x <- qnorm(c(1/4, 3/4))
+y <- quantile(df$x, c(1/4, 3/4))
+a <- (y[2] - y[1]) / (x[2] - x[1])
+b <- y[1] - a * x[1]
+plot + geom_abline(slope = a, intercept = b) +
+  coord_cartesian(ylim=c(7, 16))
+df %>% ggplot(aes(sample=x)) +
+  geom_qq() +
+  geom_qq_line() +
+  coord_cartesian(ylim=c(7, 16))
+```
 
 
 
@@ -392,6 +403,18 @@ plot(df.tuk)
 ```
 **Esercizio**: realizzare lo stesso grafico con `ggplot` invece che con `plot`.
 
+```{r}
+df.tuk$Cotton %>% 
+  as_tibble(rownames="pair") %>% 
+  arrange(desc(pair)) %>% 
+  mutate(pair = factor(pair, ordered = T, levels=pair)) %>% 
+  ggplot(aes(x=pair)) + 
+  geom_errorbar(aes(ymin=lwr, ymax=upr)) +
+  geom_point((aes(y=diff))) +
+  geom_hline(yintercept = 0, lty=2) +
+  coord_flip()
+
+```
 
 
 
