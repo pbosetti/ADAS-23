@@ -1,0 +1,58 @@
+---
+title: "Bootstrap non parametrico"
+author: "Paolo Bosetti"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(boot)
+```
+
+# Bootstrap: esempio base
+
+Intervallo di confidenza per la media campionaria di un singolo campione (equivalente di un T-test a un campione a due lati).
+
+Creiamo una tabella di dati e utilizziamo la funzione `boot()` per calcolare i **campioni di bootstrap**, cioè le $R$ repliche del calcolo della statistica di interesse (media) su altrettanti campioni ottenuti dal campione di partenza mediante ricampionamento con reinserimento.
+
+```{r}
+set.seed(1)
+R = 10000
+data <- rnorm(100 , 1, 10)
+data.b <- boot(data, R=R, statistic=function(x, i) mean(x[i]))
+data.b
+```
+
+Nell'output, il valore `original` è la media calcolata sul campione originale.
+
+L'intervallo di confidenza è calcolato dalla funzione `boot.ci()`, mediante il metodo dei quantili (o percentili):
+
+```{r}
+data.ci <- boot.ci(data.b, type="perc")
+data.tt <- t.test(data)
+```
+
+Confrontiamo i due intervalli su un grafico:
+
+```{r}
+data.orig <- tibble(
+  i = seq_along(data) * 100, 
+  y=data
+)
+
+tibble(
+  i = 1:R,
+  t = data.b$t
+) %>% 
+  ggplot(aes(x=i, y=t)) +
+  geom_point(size = 0.5, alpha = 0.5) +
+  geom_hline(aes(yintercept=data.ci$percent[4])) +
+  geom_hline(aes(yintercept=data.ci$percent[5])) +
+  geom_hline(aes(yintercept=data.tt$conf.int[1]), color="red", lty=2) + 
+  geom_hline(aes(yintercept=data.tt$conf.int[2]), color="red", lty=2) +
+  geom_point(data=data.orig, aes(x=i, y=y), color=gray(0.5))
+```
+**Esercizio**: modificare l'ultimo grafico trasformandolo in un istogramma con le linee verticali corrispondenti agli intervalli di confidenza
+

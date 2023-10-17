@@ -359,3 +359,60 @@ plot(perf_pos, colorize=T, print.cutoffs.at=seq(0,1,0.1))
 
 Da cui si evince che ridurre la soglia sotto 0.4, pur non migliorando molto i falsi negativi, comporterebbe un sensibile aumento dei falsi positivi.
 
+
+# Regressione ai minimi quadrati (non lineare)
+
+```{r}
+f <- function(t, t0 = 0, bias = 0, a = 1) {
+  b <- -2 * a * t0
+  c <- bias + a * t0^2
+  y <- a * t^2 + b * t + c
+  return(ifelse(t < t0, bias, y))
+}
+```
+
+
+```{r}
+set.seed(1)
+onset <- 2.5 # s
+bias <- 3    # N
+a <- 1
+
+data <- tibble(
+  t = seq(-10, 10, length.out=100),
+  yn = f(t, onset, bias, 1),
+  y = yn + rnorm(length(t), 0, 2)
+)
+
+data %>% 
+  ggplot(aes(x=t)) +
+  geom_point(aes(y=y)) + 
+  geom_line(aes(y=yn))
+```
+
+```{r}
+data.nls <- nls(y ~ f(t, t0, b, a), data=data, 
+                start=list(
+                  t0 = 0,
+                  b = 0,
+                  a = 10
+                ))
+summary(data.nls)
+
+```
+```{r}
+data %>% 
+  add_predictions(data.nls) %>% 
+  ggplot(aes(x=t)) +
+  geom_point(aes(y=y)) +
+  geom_line(aes(y=pred), color="red") +
+  geom_line(aes(y=yn), color="blue", lty = 2)
+```
+```{r}
+data %>% 
+  add_residuals(data.nls) %>% 
+  ggplot(aes(sample=resid)) +
+  geom_qq() + 
+  geom_qq_line()
+```
+

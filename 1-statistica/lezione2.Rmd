@@ -247,11 +247,29 @@ df <- tibble(
 ) 
 plot <- df %>% 
   ggplot(aes(x=q, y=x)) +
-  geom_point() +
-  geom_abline()
+  geom_point()
 plot
 ```
 **Esercizio**: aggiungere la linea diagonale che passa per il primo e il terzo quartile.
+
+```{r}
+qx <- qnorm(c(1/4, 3/4))
+qy <- quantile(df$x, c(1/4, 3/4))
+# y = a*x + b
+a <- (qy[2] - qy[1])/(qx[2] - qx[1])
+b <- qy[1] - a * qx[1]
+plot +
+  geom_point(aes(x=x, y=y), data=tibble(x=qx, y=qy), color="red") +
+  geom_abline(slope = a, intercept = b) +
+  coord_cartesian(ylim=c(7,15))
+
+df %>% 
+  ggplot(aes(sample=x)) +
+  geom_qq() + 
+  geom_qq_line() +
+  coord_cartesian(ylim=c(7,15))
+```
+
 
 
 
@@ -391,6 +409,17 @@ df.tuk <- TukeyHSD(aov(Strength~Cotton, data=df), conf.level=0.99)
 plot(df.tuk)
 ```
 **Esercizio**: realizzare lo stesso grafico con `ggplot` invece che con `plot`.
+
+```{r}
+df.tuk$Cotton %>% 
+  as_tibble(rownames="pairs") %>% 
+  mutate(pairs = factor(pairs, ordered = T, levels=rev(pairs))) %>%
+  ggplot(aes(x=pairs)) +
+  geom_errorbar(aes(ymin=lwr, ymax=upr)) +
+  geom_point(aes(y=diff)) +
+  coord_flip() +
+  labs(y="Differenze tra le medie", x="Coppie")
+```
 
 
 
