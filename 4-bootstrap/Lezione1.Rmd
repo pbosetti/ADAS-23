@@ -56,3 +56,220 @@ tibble(
 ```
 **Esercizio**: modificare l'ultimo grafico trasformandolo in un istogramma con le linee verticali corrispondenti agli intervalli di confidenza
 
+```{r}
+tibble(
+  i = 1:R,
+  t = data.b$t
+) %>% 
+  ggplot(aes(x=t)) +
+  geom_histogram(bins=30, color=gray(0.5), alpha=0.5) +
+  geom_vline(aes(xintercept=data.ci$percent[4])) +
+  geom_vline(aes(xintercept=data.ci$percent[5])) +
+  geom_vline(aes(xintercept=data.tt$conf.int[1]), color="red", lty=2) + 
+  geom_vline(aes(xintercept=data.tt$conf.int[2]), color="red", lty=2)
+```
+```{r}
+alpha <- 0.05
+quantile(data.b$t, c(alpha/2, 1-(alpha/2)))
+
+data.ci$percent[4:5]
+```
+```{r}
+tibble(x=data.b$t) %>% 
+  ggplot(aes(sample=x)) +
+  geom_qq() +
+  geom_qq_line()
+```
+
+```{r}
+m <- mean(data.b$t)
+s <- sd(data.b$t)
+
+tibble(
+  x = seq(min(data.b$t), max(data.b$t), length.out=R),
+  y = ecdf(data.b$t)(x),
+  yn = pnorm(x, mean=m, sd=s)
+) %>% 
+  ggplot(aes(x=x)) +
+  geom_point(aes(y=y)) +
+  geom_line(aes(y=yn), color="red") +
+  geom_vline(xintercept=c(data.ci$percent[4:5])) +
+  geom_hline(yintercept=c(alpha/2, 1-alpha/2))
+```
+
+## Regressione lineare, primo grado
+
+$$ y = a + b x $$
+
+```{r}
+set.seed(1)
+N <- 10
+k <- c(a=10, b=2)
+
+data <- tibble(
+  x = runif(N, 0, 10),
+  y = k["a"] + k["b"] * x + rnorm(N, sd=2)
+)
+
+data %>% 
+  ggplot(aes(x=x, y=y)) + 
+  geom_point() +
+  geom_smooth(method="lm")
+```
+
+
+```{r}
+k.lm <- lm(y~x, data=data)$coefficients
+names(k.lm) <- names(k)
+k.lm
+```
+```{r}
+linfit <- function(data) {
+  N <- length(data$x)
+  A <- matrix(c(rep(1, N), data$x), nrow=N, ncol=2, byrow=F)
+  res <- as.vector(MASS::ginv(A) %*% data$y)
+  names(res) <- c("a", "b")
+  return(res)
+}
+k.lf <- linfit(data)
+```
+
+```{r}
+data.b <- boot(data, R=10000, statistic = function(x, i) linfit(x[i,]))
+data.b
+boot.ci(data.b, type="perc", index=1)
+boot.ci(data.b, type="perc", index=2)
+```
+
+## Bootstrap parametrico
+
+```{r}
+set.seed(1)
+data <- rbeta(100, 1, 10)
+
+tibble(
+  x=data
+) %>% 
+  ggplot(aes(x=x)) + 
+  geom_histogram(bins=20, color=gray(0.5), alpha=0.5)
+
+data.pb <- boot(
+  data,
+  R=10000,
+  sim = "parametric",
+  statistic = function(x, i) mean(x[i]),
+  mle = list(mean=mean(data), sd=sd(data)),
+  ran.gen = function(x, p) rnorm(length(x), mean=p$mean, sd=p$sd)
+)
+data.pb
+boot.ci(data.pb, type="perc")
+```
+
+```{r}
+data.b <- boot(
+  data,
+  R=10000,
+  statistic = function(x, i) mean(x[i]),
+)
+data.b
+boot.ci(data.b, type="perc")
+```
+
+## Intervallo di confidenza per regressione ai minimi quadrati
+
+```{r}
+f <- function(t, t0 = 0, bias = 0, a = 1) {
+  b <- -2 * a * t0
+  c <- bias + a * t0^2
+  y <- a * t^2 + b * t + c
+  return(ifelse(t < t0, bias, y))
+}
+```
+
+
+```{r}
+set.seed(1)
+onset <- 2.5 # s
+bias <- 3    # N
+a <- 1
+
+data <- tibble(
+  t = seq(-10, 10, length.out=100),
+  yn = f(t, onset, bias, 1),
+  y = yn + rnorm(length(t), 0, 2)
+)
+
+data %>% 
+  ggplot(aes(x=t)) +
+  geom_point(aes(y=y)) + 
+  geom_line(aes(y=yn))
+```
+
+```{r}
+fit <- nls(y ~ f(t, t0, b, a), data=data, 
+                start=list(
+                  t0 = 0,
+                  b = 0,
+                  a = 10
+                ))
+summary(fit)
+
+```
+```{r}
+stats <- function(y, data) {
+  fit <- nls(y~f(t, t0, bias, a), data=data, start=list(t0=0, bias=0, a=1))
+  pars <- fit$m$getPars()
+  return(pars)
+}
+
+stats(data$y, data)
+```
+```{r}
+data.b <- boot(data, R=10000, statistic = function(x, i) stats(x[i, "y"], x[i,]))
+```
+
+```{r}
+data.b
+boot.ci(data.b, type="perc", index=1)
+boot.ci(data.b, type="perc", index=2)
+boot.ci(data.b, type="perc", index=3)
+```
+```{r}
+ci <- list(
+  t0 = boot.ci(data.b, type="perc", index = 1)$percent[4:5],
+  bias = boot.ci(data.b, type="perc", index = 2)$percent[4:5],
+  a = boot.ci(data.b, type="perc", index = 3)$percent[4:5]
+)
+ci
+```
+```{r}
+data %>% 
+  ggplot(aes(x=t, y=y)) +
+  geom_rect(aes(xmin=ci$t0[1], xmax=ci$t0[2], ymin=-Inf, ymax=Inf), fill=gray(0.5)) +
+  geom_rect(aes(ymin=ci$bias[1], ymax=ci$bias[2], xmin=-Inf, xmax=Inf), fill=gray(0.5)) +
+  geom_vline(xintercept=data.b$t0["t0"]) +
+  geom_hline(yintercept=data.b$t0["bias"]) +
+  geom_point() +
+  geom_line(aes(y=yn), color="red", lty=2) +
+  coord_cartesian(xlim=c(0, 5), ylim=c(0, 10))
+  
+```
+
+```{r}
+f_conf <- function(t, f, ci, upper=T) {
+  df <- expand.grid(ci)
+  df$f <- f(t, df$t0, df$bias, df$a)
+  return(ifelse(upper, max(df$f), min(df$f)))
+}
+
+data %>% 
+  mutate(
+    upper = map_dbl(t, ~ f_conf(., f, ci)), # massimo tra tutte le combinazioni
+    lower = map_dbl(t, ~ f_conf(., f, ci, upper=F))# minimo
+  ) %>% 
+  ggplot(aes(x=t)) + 
+  geom_point(aes(y=y)) +
+  geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.5) +
+  geom_line(aes(y=yn))
+```
+
