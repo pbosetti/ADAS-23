@@ -6,7 +6,7 @@ logo_height: "1.2cm"
 author: 
 - Nome e Cognome
 date: "`r Sys.Date()`"
-company: "Università di Trento, Dipartimento di Ingegneria Industriale"
+company: "Dipartimento di Ingegneria Industriale, corso di Misure Industriali"
 output: memor::pdf_memo
 classoption: a4paper
 number_sections: true
