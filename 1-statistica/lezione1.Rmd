@@ -1,0 +1,262 @@
+---
+title: "Lezione"
+author: "Paolo Bosetti"
+date: "`r Sys.Date()`"
+output:
+  word_document:
+    toc: yes
+  html_document:
+    toc: yes
+    df_print: paged
+  html_notebook:
+    toc: yes
+    number_sections: yes
+    fig_width: 5
+    fig_height: 4
+  pdf_document:
+    toc: yes
+    number_sections: yes
+subtitle: Introduzione ai notebook, statistica descrittiva
+---
+
+# Introduzione
+
+## Basi di Markdown
+
+Per la formattazione semplice dei paragrafi è possibile usare **testo in grassetto** (doppio asterisco) o *testo in corsivo* (singolo asterisco). 
+
+I nuovi paragrafi iniziano dopo una riga vuota. Un elenco puntato si ottiene:
+
+* separandolo dal testo con una riga vuota (obbligatoria)
+* iniziando ogni nuovo punto con un asterisco seguito da spazio su una nuova riga
+  - si può creare un sottoelenco *indentando* una o più volte
+  - *indentare* significa premere <Tab> all'inizio di una riga
+* al posto degli asterischi è possibile usare il trattino -
+
+Un *hyperlink* può essere inserito [in questo modo](https://paolobosetti.quarto.pub/adas-1). È possibile anche inserire link a capitoli del documento: [Distribuzioni](#distribuzioni) (il nome della sezione è come il titolo, preceduto da #, tutto minuscolo e sostituendo gli spazi con un trattino).
+
+## Equazioni in LaTeX
+
+In breve, le equazioni in LaTeX possono essere inserite sia in linea, come questa: $a=b+c$, che separatemente dal testo, in questo modo:
+
+$$
+a = b + c
+$$
+I quozienti si inseriscono come `\frac{numeratore}{denominatore}`:
+
+$$
+a = \frac{1}{b+c}
+$$
+
+Gli apici e i pedici si creano con `^` e `_`, rispettivamente. Se in apice o pedice c'è più di un carattere, questi vanno circondati da graffe:
+
+$$
+x_{ij} = \mu + \tau_i + \epsilon_{ij} 
+$$
+Come si vede, le lettere greche si ottengono anteponendo `\` al nome della lettera. Si noti che per la lettera epsilon esistono due varianti tipografiche: $\epsilon$ (`\epsilon`) e $\varepsilon$ (`\varepsilon`); per i indicare i residui si preferisce di solito la seconda.
+
+Le sommatorie e gli integrali si ottengono con `\sum` e `\int`, rispettivamente:
+
+$$
+\bar x = \frac{1}{N} \sum_{i=1}^N x_i
+$$
+e:
+
+$$
+f^-(x) = \int_{-\infty}^x f(\xi) d\xi;~~~f^+(x) = \int_x^{+\infty} f(\xi) d\xi
+$$
+Si noti che il carattere `~` indica uno spazio.
+
+Per ottenere più equazioni allineate in un blocco si usa l'ambiente `align`:
+
+\begin{align}
+f^-(x) &= \int_{-\infty}^x f(\xi) d\xi \\
+f^+(x) &= \int_x^{+\infty} f(\xi) d\xi;
+\end{align}
+
+Dove ogni linea eccetto l'ultima deve terminare con un doppio *backslash* e il carattere `&` indica il punto di allineamento.
+
+Infine, i nomi delle funzioni più comuni (trigonometriche, esponenziali, ...) devono essere preceduti da una backslash, perché scrivere $\sin(x)$ non è come scrivere $sin(x)$ (quest'ultimo è il prodotto delle quattro variabili $s$, $i$, $n$ e $x$).
+
+## Differenze tra *Preview* e *Knit*
+
+La compilazione del notebook può essere eseguita in modalità
+
+* *Preview*: genera un HTML
+* *Knit*: genera, a scelta, un HTML, un PDF o un file MSWord
+
+La modalità *Preview* utilizza l'output dei chunk R già valutati nella sessione del notebook. Ciò significa che se un particolare chunk non è stato eseguito (e non ha quindi generato output), il documento HTML prodotto non conterrà il grafico o il testo risultante dal chunk in questione. Quindi, prima di aggiornare la *preview* è opportuno ri-eseguire tutti i chunk (comando *Run All*). In altre parole, gli oggetti R che compaiono nell'output sono gli stessi elencati nell'environment,
+
+La modalità *Knit*, invece, esegue automaticamente tutti i chunk ad ogni generazione dell'output, e lo fa **in una sessione di R separata**, con il suo proprio environment che viene distrutto a generazione terminata.
+
+Quindi, con *Knit* si è sempre sicuri che l'output sia sincronizzato con il codice, anche se per documenti lunghi la generazione può richiedere più tempo. 
+
+Con *Preview*, invece, la generazione è più rapida (ma si ottiene solo HTML), però è accurata solo durante la stesura del documento, quando ogni chunk è eseguito mano a mano che lo si completa.
+
+# Statistica descrittiva
+
+## Media e varianza campionaria
+
+La media e la varianza di un campione (vettore) si ottengono con le funzioni `mean()` e `var()`; la deviazione standard con `sd()`:
+
+```{r}
+v <- c(10, 14, 12, 9, 7)
+mean(v)
+var(v)
+sd(v)
+sd(v)^2
+```
+È anche possibile valutare un'espressione R in linea: la media del campione è `r mean(v)`.
+
+## Distribuzioni
+
+In R ci sono numerose funzioni correlate con le varie distribuzioni note:
+
+* `binom`: binomiale
+* `pois`: Poisson
+* `geom`: geometrica
+* `unif`: uniforme
+* `norm`: normale o gaussiana
+* `chisq`: Chi-quadro
+* `t`: T di Student
+* `f`: F di Snedecor
+
+A questi nomi va premesso un carattere per la funzione desiderata: 
+
+* `r`: generazione numeri casuali
+* `d`: PDF
+* `p`: probabilità, o CDF
+* `q`: quantile
+
+Quindi ad esempio per generare un campione di numeri casuali provenienti dalla popolazione con distribuzione uniforme tra 10 e 20:
+
+```{r}
+set.seed(0)
+runif(10, 10, 20)
+```
+
+Per la T di Student a 7 gradi di libertà:
+
+```{r}
+rt(10, 7)
+```
+
+Per studiare PDF, CDF e quantile è necessario introdurre i grafici usando la funzione `plot()`:
+
+```{r}
+s <- rnorm(100, 1, 1)
+plot(s)
+```
+
+Cioè: se l'argomento di plot è un solo vettore, come ascissa viene assunto l'*indice*, cioè la posizione di ogni valore nel vettore stesso.
+
+Per ottenere il grafico di due vettori X e Y **aventi la stessa lunghezza**:
+
+```{r}
+x <- 1:100
+y <- x^2
+y2 <- 10*x+x^2
+plot(x, y, typ="l", col="red")
+lines(x, y2, col="blue")
+```
+
+Proviamo a ottenere il grafico della PDF normale:
+
+```{r}
+x <- seq(-3, 3, 0.1)
+y <- dnorm(x)
+plot(x, y, typ="l", xlab="x", ylab="Densità di probabilità", main="PDF normale")
+grid()
+```
+
+Confrontiamo la normale standard con la T di Student:
+
+```{r}
+yt <- dt(x, 7)
+plot(x,y, typ="l", col="blue")
+lines(x, yt, col="red")
+lines(x, dt(x, 30), col="green")
+```
+
+Proviamo a confrontare $\mathcal{N}(0,1)$ con $\mathcal{N}(0, 0.5)$:
+
+```{r}
+yn2 <- dnorm(x, 0, 0.5)
+plot(x, y, typ="l")
+lines(x, yn2, col="red")
+```
+
+Si osserva che l'estensione degli assi è definita dal primo plot: le serie aggiunte successivamente non cambiano gli estremi delle scale e, quindi, potrebbero non essere completamente visualizzate. Per evitare il problema possiamo:
+
+* iniziare con il plot delle serie con maggiore escursione
+* specificare esplicitamente gli intervalli degli assi nel primo plot con gli argomenti `xlim` e `ylim`:
+
+
+```{r}
+yn2 <- dnorm(x, 0, 0.5)
+plot(x, y, typ="l", ylim=c(0, 1), xlim=c(-2, 2))
+lines(x, yn2, col="red")
+```
+
+Per esercizio, costruire i grafici della CDF e della funzione quantile delle distribuzioni Ch quadro e F di Snedecor.
+
+## Istogrammi
+
+L'istogramma di un campione si ottiene con la funzione `hist()`. Confrontiamo l'istogramma di un campione normale di 1000 elementi con la PDF della relativa distribuzione:
+
+```{r}
+c <- rnorm(1000)
+hist(c)
+lines(x, dnorm(x))
+```
+Come mai la PDF non è visibile? il massimo della funzione è `max(rnorm(x)) = ` `r max(rnorm(x))`, cioè è troppo bassa per essere osservabile sulla scala verticale.
+
+Per confrontare un istiogramma con la sua distribuzione dobbiamo specificare che sulla scala verticale vogliamo la **densità** anziché la **frequenza** (la densità è la frequenza divisa per la larghezza di ciascun *bin*):
+
+
+```{r}
+c <- rnorm(1000)
+hist(c, freq=F, ylim=c(0, 0.6))
+lines(x, dnorm(x))
+```
+
+È utile anche la *empirical cumulative distribution function*, ECDF.
+
+```{r}
+x <- seq(-3, 3, 0.1)
+s <- rnorm(100)
+plot(ecdf(s))
+lines(x, pnorm(x), col="red")
+```
+I quantili di un campione possono essere calcolati con la funzione `quantile()`:
+
+```{r}
+quantile(s, probs=seq(0,1,1/3))
+plot(ecdf(s))
+lines(x, pnorm(x), col="red")
+abline(v=quantile(s), col="green", lty=2)
+```
+
+Plot di un data frame:
+
+```{r}
+df <- data.frame(
+  x = x,
+  y = rnorm(length(x)),
+  y2 = rnorm(length(x), 1, 0.5)
+)
+head(df)
+```
+Grafico:
+
+```{r}
+plot(y~x, data=df)
+points(y2~x, data=df, col="red")
+```
+
+# Statistica inferenziale
+
+
+## Test di Student
+
+

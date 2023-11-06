@@ -1,0 +1,418 @@
+---
+title: "Regressione"
+author: "Paolo Bosetti"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggExtra)
+library(modelr)
+library(ROCR)
+```
+
+# Regressione di modelli lineari univariati
+
+```{r}
+set.seed(0)
+N <- 100
+df <- tibble(
+  x = seq(-10, 10, length.out=N),
+  y_nom = 2 * x + 0.1 * x^2,
+  y = y_nom + rnorm(N, 0, 2)
+)
+
+df %>% 
+  ggplot(aes(x=x, y=y)) + 
+  geom_point() +
+  geom_line(aes(y=y_nom), color="red")
+```
+Realizziamo il modello lineare:
+$$
+y_i = a + bx_i + c x_i^2+\varepsilon_i
+$$
+
+```{r}
+(df.lm <- lm(y~x+I(x^2), data=df))
+```
+```{r}
+summary(df.lm)
+```
+Riformuliamo il modello lineare togliendo il termine che ha un *p*-value eccessivo:
+
+```{r}
+df.lm <- lm(y~x + I(x^2) - 1, data=df)
+summary(df.lm)
+```
+Grafici:
+
+```{r}
+df %>% 
+  ggplot(aes(x=x, y=y)) +
+  geom_smooth(
+    method="lm",
+    formula=df.lm$call$formula,
+    level=0.99,
+    lty=2
+  ) +
+  geom_point() +
+  geom_line(aes(y=y_nom), color = "red")
+```
+
+Controllo i residui:
+
+```{r}
+p <- df %>% ggplot(aes(x=x, y=df.lm$residuals)) +
+  geom_point()
+
+p %>% ggMarginal(type="histogram", margins="y", bins=10)
+shapiro.test(df.lm$residuals)
+
+df %>% ggplot(aes(sample=df.lm$residuals)) + 
+  geom_qq() + 
+  geom_qq_line()
+```
+
+## Sotto-adattamento (*underfitting*)
+
+Modello lineare di primo grado:
+
+```{r}
+df.lm2 <- lm(y~x, data=df)
+summary(df.lm2)
+```
+```{r}
+df$res2 <- df.lm2$residuals
+
+df %>% ggplot(mapping=aes(sample=res2)) + 
+  geom_qq() + 
+  geom_qq_line()
+shapiro.test(df.lm2$residuals)
+```
+
+```{r}
+(df %>% ggplot(aes(x=x, y=res2)) +
+  geom_point()) %>% 
+  ggMarginal(type="histogram", margin="y", bins=10)
+```
+
+# Sovra-adattamento (*overfitting*)
+
+```{r}
+df <- df %>% mutate(
+  subset = ifelse(x > -7.5 & x < 7.5, "in", "out")
+)
+
+df %>% 
+  ggplot(aes(x=x, y=y, color=subset)) + 
+  geom_smooth(
+    data=filter(df, subset=="in"),
+    method=lm,
+    formula=y~poly(x, 10, raw=T),
+    fullrange=TRUE
+  ) +
+  geom_point() +
+  coord_cartesian(ylim=c(-30, 30))
+
+```
+
+## Predizione
+
+La predizione $\hat y$ si ottiene con la funzione `predict()`:
+
+```{r}
+predict(df.lm2) %>% str()
+```
+
+Gli intervalli di confidenza attivando l'opzione `interval`:
+
+```{r}
+predict(df.lm2, interval="confidence")
+```
+Estrapolazione:
+
+```{r}
+df.new <- tibble(x=seq(-20, 20, 0.5))
+
+df.new <- df.new %>% cbind(
+  predict(
+    df.lm, 
+    newdata=df.new,
+    interval="confidence",
+    level=0.99
+  )
+)
+
+df.new %>% 
+  ggplot(aes(x=x, y=fit)) +
+  geom_line() + 
+  geom_ribbon(aes(ymin=lwr, ymax=upr), alpha=1/3) +
+  geom_point(data=df, mapping=aes(x=x, y=y))
+
+```
+L'intervallo di confidenza **sui parametri** del modello si ottiene con `confint()`:
+
+```{r}
+confint(df.lm)
+```
+
+# Dati multivariati
+
+Dati multivariati significa che abbiano più di un regressore, o variabile indipendente. Facciamo l'esempio di un sistema bivariato, e costruiamoci una griglia di valori nominali generati da una combinazione lineare di secondo grado:
+
+```{r}
+set.seed(10)
+N <- 50
+
+y <- function(x1, x2) 10 - 1*x1 + 0.1*x1^2 + 0.1*(-10*x2 + 1.5*x2^2) + 0.05 * x1 * x2
+
+dfn <- expand.grid(
+  x1=seq(0, 10, length.out=N),
+  x2=seq(0, 10, length.out=N)
+) %>% mutate(
+  y=y(x1, x2),
+)
+
+dfn %>% 
+  ggplot(aes(x=x1, y=x2, z=y)) + 
+  geom_contour_filled()
+```
+Nella realtà i dati nominali non sarebbero noti, ma dovremmo realizzare un campione ottenuto da misure sperimentali, magari ripetute, e distribuite casualmente sul dominio di $x_1$ e $x_2$. La dimensione del campione viene generalmente stabilita in funzione anche del budget (in tempo e in denaro) disponibile:
+
+```{r}
+Ns <- 100
+rep <- 3
+
+df <- dfn %>% 
+  slice_sample(n = Ns) %>% 
+  slice(rep(1:n(), each=rep)) %>% 
+  mutate(y=y + rnorm(n(), 0, range(y)/25))
+```
+
+Ora visualizziamo i dati raccolti, confrontandoli con le curve di livello del campo nominale $y=f(x_1,x_2)$:
+
+```{r}
+dfn %>% 
+  ggplot(aes(x=x1, y=x2, z=y, color=after_stat(level))) +
+  geom_contour() +
+  scale_color_viridis_b() +
+  geom_point(aes(color=y), data = df)
+
+df %>% ggplot(aes(x=x1, y=x2, color=y)) +
+  geom_point() + 
+  scale_color_viridis_b()
+```
+
+Si noti che come scala colore abbiamo scelto la scala *viridis*, che ha il vantaggio di essere leggibile anche se stampata in bianco e nero o se osservata da persone affette da discromatopsia.
+
+Ora realizziamo il modello lineare completo, cioè considerando tutte le possibili combinazioni dei termini dei polinomi di secondo grado per $x_1$ e $x_2$:
+
+```{r}
+df.lm <- lm(y~poly(x1, 2, raw=T) * poly(x2, 2, raw=T), data=df)
+summary(df.lm)
+```
+Risultano significativi solo i termini di primo e secondo grado, e nessuna interazione, sebbene l'interazione `x1:x2` è significativa al 17%.
+
+Rivediamo quindi il modello e---seguiendo un approccio cautelativo---includiamo anche il termine di interazione di primo grado:
+
+```{r}
+df.lm <- lm(y~poly(x1,2,raw=T) + poly(x2,2,raw=T) + x1:x2, data=df)
+summary(df.lm)
+```
+Come si vede, tutti i termini risultano significativi, quindi accettiamo il modello
+$$
+\hat y = \mu + a_1x_1 + a_2 x_2 + b_1 x_1^2 + b_2 x_2^2 + c x_1 x_2
+$$
+
+Ora aggiungiamo la predizione $\hat y$ e i residui alla tabella dati originaria e confrontiamo il diagramma a contorno del modello nominale e di quello regredito:
+
+```{r}
+dfn %>% 
+  add_predictions(df.lm) %>% 
+  add_residuals(df.lm) %>% 
+  ggplot(aes(x=x1, y=x2, z=y)) +
+  geom_contour_filled() +
+  geom_contour(aes(z=pred))
+```
+
+
+# Regressione lineare generalizzata
+
+Un caso particolare e molto diffuso di regressione lineare generalizzata è la **regressione logistica**.
+
+Importiamo i dati corrispondenti ad una serie di prove di sopravvivenza al *drop test* per bottiglie di sapone liquido in funzione del livello di riempimento:
+```{r}
+data <- read_table("http://repos.dii.unitn.it:8080/data/soap_bottles.txt", comment="#")
+data %>% 
+  slice_head(n=6)
+```
+
+La colonna `OK` contiene il risultato del test (binomiale), e la colopnna `p` il livello di riempimento.
+
+```{r}
+data %>% 
+  ggplot(aes(x=p)) +
+  geom_histogram(bins=20, color="black", fill=gray(0.5)) +
+  geom_rug(aes(color=OK))
+```
+
+Per prima cosa dividiamo i dati in un sottoinsieme usato per la regressione e uno usato per la validazione, in ragione di 80% per il primo e 20% per il secondo:
+
+```{r}
+N <- length(data$run)
+ratio <- 0.8
+n <- floor(N * ratio)
+data$training <- FALSE
+data$training[sample(1:N, n)] <- TRUE
+data
+```
+
+La colonna `training` ora contiene `TRUE` per l'80% dei casi.
+
+Procediamo con realizzare il modello lineare generalizzato per i dati di training, scegliendo la famiglia binomiale (cui corrisponde la funzione di collegamento logistica):
+
+```{r}
+data.glm <- glm(OK~p, family="binomial", data=filter(data, training))
+summary(data.glm)
+```
+
+Si noti che la funzione logistica:
+$$
+logit(X)=\frac{1}{1+\exp(-p(x-x_0))}
+$$
+è rappresentata in R (del tutto equivalentemente) come:
+$$
+logit(x) = \frac{1}{1+\exp(-px-m)}
+$$
+dove quindi:
+$$
+x_0 = -m/p
+$$
+Possiamo quindi calcolare la soglia di transizione $x_0$ come:
+```{r}
+x0 <- - data.glm$coefficients[1] / data.glm$coefficients[2]
+x0
+```
+
+Aggiungiamo le predizioni alla tabella dei dati con le funzioni `add_predictions()` della libreria `modelr`:
+
+```{r}
+data <- data %>%
+  add_predictions(data.glm, type="response") %>% 
+  mutate(OKn = as.numeric(OK))
+```
+
+Confrontiamo ora la predizione per i dati di validazione (quelli per cui `training`è falso):
+
+```{r}
+data %>% 
+  ggplot(aes(x=p, y=pred)) +
+  geom_line() +
+  geom_vline(xintercept = x0, lty=2) +
+  geom_point(data=filter(data, !training), aes(y=OKn, color=OK)) +
+  geom_rug(data=filter(data, !training, OK), mapping=aes(y=pred, color=OK), sides="l") +
+  geom_rug(data=filter(data, !training, !OK), mapping=aes(y=pred, color=OK), sides="r")
+```
+
+Un confronto più efficace può essere fatto mediante una tabella, o **matrice di confusione**, ricordando che le bottiglie per cui la predizione è maggiore di 0.5 sono quelle che hanno maggiori probabilità di sopravvivere al test:
+
+```{r}
+mc_t <- table(
+  Actual=filter(data, training)$OK, 
+  Predicted=filter(data, training)$pred > 0.5
+)
+mc_t
+round(mc_t / sum(mc_t) * 100, 1)
+```
+Come si vede, la soglia a 0.5 dà una quota pressoché uguale di falsi negativi (bottiglie che non avrebbero dovuto rompersi ma si sono rotte) e di falsi positivi (bottiglie che avrebbero dovuto rompersi ma sono rimaste integre).
+
+Sull'insieme di validazione vale:
+
+```{r}
+mc_v <- table(
+  Actual=filter(data, !training)$OK, 
+  Predicted=filter(data, !training)$pred > 0.5
+)
+mc_v
+round(mc_v / sum(mc_v) * 100, 1)
+```
+Considerando che la differenza è di 7 a 3, la validazione è accettabile.
+
+Ci si può ora chiedere come variare la soglia per ridurre la quantità di falsi negativi, senza peggiorare troppo i falsi positivi. Per farlo si può utilizzare la libreria `ROCR` e le sue funzioni `prediction()` e `performance()`:
+
+```{r}
+pred <- prediction(filter(data, training)$pred, filter(data, training)$OK)
+perf_neg <- performance(pred, "tnr", "fnr")
+plot(perf_neg, colorize=T, print.cutoffs.at=seq(0,1,0.1))
+```
+
+Il grafico mostra che si può ridurre la soglia a 0.4 riducendo la quantità di falsi negativi, mentre ulteriori riduzioni portano pochi benefici.
+
+Viceversa, per i falsi positivi vale:
+
+```{r}
+perf_pos <- performance(pred, "tpr", "fpr")
+plot(perf_pos, colorize=T, print.cutoffs.at=seq(0,1,0.1))
+```
+
+Da cui si evince che ridurre la soglia sotto 0.4, pur non migliorando molto i falsi negativi, comporterebbe un sensibile aumento dei falsi positivi.
+
+
+# Regressione ai minimi quadrati (non lineare)
+
+```{r}
+f <- function(t, t0 = 0, bias = 0, a = 1) {
+  b <- -2 * a * t0
+  c <- bias + a * t0^2
+  y <- a * t^2 + b * t + c
+  return(ifelse(t < t0, bias, y))
+}
+```
+
+
+```{r}
+set.seed(1)
+onset <- 2.5 # s
+bias <- 3    # N
+a <- 1
+
+data <- tibble(
+  t = seq(-10, 10, length.out=100),
+  yn = f(t, onset, bias, 1),
+  y = yn + rnorm(length(t), 0, 2)
+)
+
+data %>% 
+  ggplot(aes(x=t)) +
+  geom_point(aes(y=y)) + 
+  geom_line(aes(y=yn))
+```
+
+```{r}
+data.nls <- nls(y ~ f(t, t0, b, a), data=data, 
+                start=list(
+                  t0 = 0,
+                  b = 0,
+                  a = 10
+                ))
+summary(data.nls)
+
+```
+```{r}
+data %>% 
+  add_predictions(data.nls) %>% 
+  ggplot(aes(x=t)) +
+  geom_point(aes(y=y)) +
+  geom_line(aes(y=pred), color="red") +
+  geom_line(aes(y=yn), color="blue", lty = 2)
+```
+```{r}
+data %>% 
+  add_residuals(data.nls) %>% 
+  ggplot(aes(sample=resid)) +
+  geom_qq() + 
+  geom_qq_line()
+```
+

@@ -1,0 +1,363 @@
+---
+title: "Tidyverse"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, message=FALSE, warning=FALSE, include=FALSE}
+# setup iniziali
+library(tidyverse)
+set.seed(0)
+```
+
+# Tidyverse
+
+`Tidyverse` è una meta-libreria, cioè una collezione di librerie, che trasforma il modo in cui si utilizza R per descrivere algoritmi di manipolazione e analisi dati.
+
+## *Pipe*
+
+La prima trasformazione introdotta da tidyverse è l'introduzione dell'**operatore *pipe***. Una *pipe* è un condotto che passa l'output di una funzione all'input di una seconda funzione. Lo scopo è di rendere il codice più leggibile, evitando funzioni nidificate, e efficiente, evitando eccessive variabili intermedie. Utilizzando una *pipe* si riscrive una generica espressione `f(x, y, ...)` come `x %>% f(y, ...)`. Generalmente la *pipe* è indicata con `%>%`, ma esiste anche la forma alternativa `|>`.
+
+In R standard:
+
+```{r}
+round(mean(rnorm(10)), 2)
+```
+Questa espressione è particolarmente scomoda da leggere (la prima operazione è quella più interna) e prona ad errori (troppe parentesi). Questa sequenza di operazioni può essere resa più chiara ricorrendo a variabili intermedie:
+
+```{r}
+x <- rnorm(10)
+m <- mean(x)
+m <- round(m, 2)
+m
+```
+Ma le variabili intermedie sono meno efficienti e possono essere scomode o prone ad errori (riuso di variabili con lo stesso nome).
+
+Con l'operatore *pipe* si evitano questi problemi: le operazioni vengono chiaramente elencate una dopo l'altra in ordine logico, e l'output di ogni funzione diventa **il primo argomento** della funzione successiva:
+
+```{r}
+rnorm(10) %>% 
+  mean() %>% 
+  round(2)
+```
+
+## Tibble
+
+Le tibble sono versioni evolute dei data frame:
+
+1. sono più facili da creare
+1. sono più robuste
+1. sono più facili da visualizzare
+
+A differenza che nei data frame, è possibile che una colonna faccia direttamente riferimento ad una colonna precedente:
+
+```{r}
+df <- tibble(
+  x = 1:100,
+  y = rnorm(length(x)),
+  y2 = rnorm(length(x), 1, 0.5)
+)
+```
+Una tibble è anche visualizzata in maniera più completa (ad es. ogni colonna ha il suo tipo) e compatta (di default, mai più di 10 righe):
+
+```{r}
+df
+```
+Una tibble può essere convertita in un data frame e vice versa:
+
+```{r}
+# conversione:
+df %>% as.data.frame() %>% head()
+# vice-versa:
+df <- data.frame(x=1:10, y=(1:10)^2)
+df <- tibble(df)
+```
+È possibile creare tibble passando i dati per riga invece che per colonna:
+
+```{r}
+tribble(
+  ~x, ~y, ~z,
+  "a", 1, 10,
+  "b", 5, 8,
+  "c", 3, 12
+)
+```
+## File I/O
+
+Esistono le versioni *tidy* delle funzioni per leggere e scrivere file di testo:
+
+* `read_csv()`
+* `read_csv2()`
+* `read_table()`
+* `read_fwf()`
+
+* `write_csv()`
+* `write_csv2()`
+* `write_table()`
+* `write_fwf()`
+
+Vedere il cheatsheet qui: <https://rstudio.github.io/cheatsheets/data-import.pdf>.
+
+Consideriamo i dati disponibili su: <http://repos.dii.unitn.it:8080/data/>
+
+```{r}
+# Lettura di un file su disco
+cotton <- read_table("cotton.dat", comment="#")
+```
+
+È possibile caricare un file anche direttamente da un URL:
+
+```{r}
+# Attenzione: questo indirizzo funziona solo dalla rete di ateneo!
+cotton <- read_table("http://repos.dii.unitn.it:8080/data/cotton.dat", comment="#")
+```
+
+
+## Gestione di tabelle dati: `dplyr`
+
+La libreria `dplyr` consente di manipolare il contenuto di una tibble.
+
+Vedere il cheatsheet qui: <https://rstudio.github.io/cheatsheets/data-transformation.pdf>
+
+Il pacchetto tidyverse mette a disposizione la tibble `starwars` per testare l'uso delle funzioni.
+
+```{r}
+starwars
+```
+### Filtrare le righe
+
+```{r}
+starwars %>% 
+  filter(height > 180, eye_color=="brown")
+```
+**Attenzione**: la *pipe* non modifica mai i dati su cui opera, quindi dopo questa operazione la tabella `starwars` è immutata. Se se vuole modificarla è necessario assegnare l'output ad una nuova variabile.
+
+
+### Riordinare le righe
+
+```{r}
+starwars %>% 
+  filter(height > 180, eye_color=="brown") %>% 
+  arrange(desc(height), mass)
+```
+### Selezione di un sottoinsieme delle colonne
+
+```{r}
+starwars %>% 
+  filter(height > 180, eye_color=="brown") %>% 
+  arrange(desc(height), mass) %>% 
+  select(pianeta_natale=homeworld, name:hair_color & !height) %>% 
+  slice_head(n=5)
+```
+
+### Modificare una colonna
+
+```{r}
+starwars %>% 
+  mutate(
+    height = height / 100,
+    BMI = mass/height^2 %>% round(1)
+  ) %>% 
+  relocate(
+    BMI, .after=height,
+  )
+```
+
+### Raggruppamento e sommario
+
+```{r}
+starwars %>% 
+  group_by(species, sex) %>% 
+  summarise(
+    height = mean(height, na.rm=T),
+    mass = mean(mass, na.rm=T)
+  ) %>% 
+  arrange(desc(height))
+```
+
+Attenzione ai `NA`:
+
+```{r}
+v <- c(1, NA, 2)
+mean(v, na.rm=T)
+```
+
+
+## Riorganizzazione: `tidyr`
+
+La *data science* si basa sul concetto di strutture dati *tidy*, cioè pulite, in cui le variabili stanno sulle colonne e le osservazioni stanno sulle righe. Secondo questo criterio le tabelle tendono a essere **lunghe**: all'opposto, quando si hanno più osservazioni sulla stessa riga, le tabelle tendono a essere più **larghe**.
+
+Vedere il cheatsheet qui: <https://rstudio.github.io/cheatsheets/tidyr.pdf>.
+
+Le funzioni `pivot_longer()` e `pivot_wider()` servono per convertire tra questi due formati:
+
+```{r}
+relig_income
+income <- relig_income %>% 
+  pivot_longer(
+    !religion,          # prendi i dati da tutte le colonne tranne religion
+    names_to="income",  # nomi delle colonne vanno a formare la colonna income
+    values_to = "count" # i valori delle celle formano la colonna count
+  )
+income
+```
+Viceversa:
+
+```{r}
+income %>%
+  pivot_wider(
+    names_from=income, # aggiungi colonne dai valori unici in colonna income
+    values_from=count  # prendi i valori dalla colonna count
+  )
+```
+
+
+
+
+## Mappatura di funzioni
+
+La maggior parte delle funzioni native di R è **vettorializzata**, cioè applicando una funzione a un vettore, la funzione viene applicata a tutti gli elementi del vettore.
+
+Tuttavia, funzioni definite dall'utente potrebbero non essere vettorializzate. In questi casi è possibile usare le funzioni della libreria `purrr` per **mappare** una funzione a tutti gli elementi di un vettore:
+
+```{r}
+map_dbl(1:3, function(x) sqrt(x) + 2)
+# che può essere abbreviata con:
+map_dbl(1:3, ~ sqrt(.) + 2)
+```
+
+Vedere anche il cheatsheet qui: <https://rstudio.github.io/cheatsheets/purrr.pdf>.
+
+Esempio: considerando i dati `relig_income` sopra riportati in formato *tidy*, vogliamo trasformare la colonna `cont` in modo che riporti la percentuale anziché il conteggio.
+
+Per prima cosa calcoliamo i totali per ogni religione:
+```{r}
+(totals <- income %>% 
+  group_by(religion) %>% 
+  summarise(total=sum(count)))
+```
+
+Ora possiamo creare una nuova colonna che contenga la percentuale. Per calcolarla dobbiamo applicare una funzione ad ogni elemento della colonna `count` che divida il conteggio per il totale cercato nella tabella `totals`. Possiamo farlo in due passaggi (creando colonne `total` e `perc`) o in un passo solo (usando la funzione di mappa a due valori, `map2_dbl`):
+
+```{r}
+income %>% 
+  mutate(
+    total = map_dbl(religion, ~totals[totals$religion==.,]$total), # in due passi
+    perc = (count/total*100) %>% round(2),                         # in due passi
+    perc2 = map2_dbl(religion, count,                              # o in uno
+                     ~ (.y/totals[totals$religion==.x,]$total*100) %>% round(2))
+  )
+```
+Oppure, usando un **vettore nominato** e senza ricorrere ad una mappa:
+
+```{r}
+totals_v <- totals$total
+names(totals_v) <- totals$religion
+
+income %>% 
+  mutate(perc3 = round(count/totals_v[religion]*100, 2))
+```
+
+O, ancora più semplicemente, con un `left_join()`:
+
+```{r}
+income %>%
+  left_join(totals) %>% 
+  mutate(perc = round(count/total*100, 2))
+```
+
+Anche in un colpo solo, senza bisogno di creare tabelle di appoggio:
+
+```{r}
+income %>% 
+  left_join(group_by(., religion) %>% summarise(total=sum(count))) %>% 
+  mutate(perc = round(count/total*100, 2))
+# oppure, in maniera equivalente:
+income <- income %>% 
+  left_join(summarise(., total=sum(count), .by=religion)) %>% 
+  mutate(perc = round(count/total*100, 2))
+```
+
+In questo caso, si sfrutta il fatto che l'oggetto passato dalla *pipe* è disponibile come variabile speciale `.` (punto) nella funzione a valle.
+
+# Grafici
+
+La libreria `ggplot2` è molto più flessibile e potente delle funzioni grafiche di base.
+
+Vedere il cheatsheet qui: <https://rstudio.github.io/cheatsheets/data-visualization.pdf>.
+
+```{r}
+tibble( # Dati in ingresso
+  v1 = 1:10,
+  v2 = v1 ^ 2,
+  v3 = v2 + 10
+) %>%  # pipe
+  ggplot(aes(x=v1)) + # ggplot prepara il grafico
+  geom_line(aes(y=v2)) +  # primo layer
+  geom_point(aes(y=v2)) + # secondo layer
+  geom_line(aes(y=v3)) +  # terzo layer
+  geom_point(aes(y=v3))   # quarto layer
+```
+
+Per esempio, vogliamo realizzare un grafico dei dati di correlazione tra reddito e religione professata. Vogliamo la religione in ascissa e la percentuale in ordinata, e vogliamo che la dimensione dei punti sia proporzionale al reddito. Anzitutto, dobbiamo convertire la colonna `income` (che  fatta da stringhe) in una colonna numerica `income_n`. Inoltre, cambiamo la colonna `income` da stringa in fattore ordinato, in modo che negli assi coordinati venga elencato nell'ordine che vogliamo noi (altrimenti è ordine alfabetico):
+
+```{r}
+income_lvl <- c((1:5)*10, 75, 100, 150, 300, 0)
+names(income_lvl) <- relig_income %>% select(!religion) %>% names()
+
+# Nota che ora income_lvl["$10-20k"] restituisce 20
+
+income <- income %>% 
+  mutate(
+    income_n = map_dbl(income, ~ income_lvl[.]), 
+    income = factor(income, ordered=T, levels=names(income_lvl)),
+    .after=income
+  )
+income
+```
+
+Ora possiamo effettuare il grafico, aggiungendo come estetiche il colore (associato al **fattore** `income`) e la dimensione del punto (associata al valore numerico `income_n`). Specifichiamo che i punti hanno `shape=21`, cioè cerchio con bordo di spessore `stroke=0.5` e senza riempimento (`fill=NA`):
+
+```{r}
+income %>% 
+  ggplot(aes(x=religion)) +
+  geom_point(aes(y=perc, color=income, size=income_n), stroke=0.5, fill=NA, shape=21) +
+  scale_size(guide="none") +
+  scale_color_viridis_d() +
+  theme(axis.text.x = element_text(angle = 90, hjust=1, vjust=0.5))
+```
+
+Oppure come grafico a barre sovrapposte, dato che si tratta di percentuali a somma 100:
+
+```{r}
+income %>% 
+  filter(income != "Don't know/refused") %>% 
+  ggplot(aes(x = religion, y = perc, fill = income, group = income)) + 
+  geom_col() +
+  labs(y="Percentuale", x="Religione", fill="Reddito") +
+  geom_hline(yintercept=100, linetype=2) +
+  coord_flip()
+```
+
+```{r}
+# Vettore di religioni ordinate secondo la percentuale di più ricchi:
+religion_ord <- income %>% 
+  filter(income_n==300) %>% 
+  arrange(desc(perc)) %>% 
+  pull(religion)
+
+# riordino il fattore religion e rifaccio il grafico
+income %>% 
+  mutate(
+    religion = factor(religion, ordered=T, levels=religion_ord)
+  ) %>% 
+  filter(income != "Don't know/refused") %>% 
+  ggplot(aes(x = religion, y = perc, fill = income, group = income)) + 
+  geom_col() +
+  labs(y="Percentuale", x="Religione", fill="Reddito") +
+  geom_hline(yintercept=100, linetype=2) +
+  coord_flip()
+```
+

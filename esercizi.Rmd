@@ -1,0 +1,228 @@
+---
+title: "Esercizi"
+author: "Paolo Bosetti"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE
+)
+library(tidyverse)
+library(modelr)
+```
+
+
+# Resistenza a compressione cemento
+
+Confronto tra resistenza a compressione di cemento prodotto da due impianti di macinazione differenti:
+
+```{r}
+df <- read.table("http://repos.dii.unitn.it:8080/data/mortar.dat", header=T)
+str(df)
+```
+
+Verifichiamo la varianza:
+```{r}
+var.test(Strength~Mortar, data=df)
+```
+
+Quindi i due campioni sono omoschedastici.
+
+```{r}
+t.test(Strength~Mortar, data=df, var.equal=T)
+```
+Cioè i valori attesi dei due campioni sono differenti, con una probabilità d'errore del 4e-8.
+
+
+# Misure di durezza Vickers
+
+Abbiamo due [indentatori Vickers](https://en.wikipedia.org/wiki/Vickers_hardness_test), e sospettiamo che uno dei due abbia il diamante scheggiato e dia quindi valori di durezza sbagliati. 
+
+Non abbiamo però campioni su cui testare la durezza che siano sufficientemente omogenei da consentire di realizzare più di due prove in una zona di superficie con proprietà omogenee. Effettuiamo quindi un test di Student accoppiato:
+
+```{r}
+df <- read.table("http://repos.dii.unitn.it:8080/data/hardness2.dat", header=T)
+str(df)
+```
+Opzionale: rendiamo il data frame *tidy*:
+
+```{r}
+(dft <- df %>% pivot_longer(!Specimen, values_to = "hardness", names_to = "tip"))
+```
+
+Il boxplot e un T-test convenzionale non mostrano differenze:
+
+```{r}
+dft %>% 
+  ggplot(aes(x=tip, y=hardness)) +
+  geom_boxplot()
+
+t.test(hardness~tip, data=dft, var.equal=var.test(hardness~tip, data=dft)$p.value>0.05)
+```
+
+Al contrario, un T-test accoppiato mostra che i due indentatori sono significativamente differenti:
+
+```{r}
+t.test(hardness~tip, data=dft, paired=T)
+```
+
+# Dieta e coagulazione
+
+Somministriamo a delle cavie differenti diete e misuriamo il tempo di coagulazione del sangue dopo un mese di trattamento: c'è una correlazione significativa?
+
+```{r}
+df <- read.table("http://repos.dii.unitn.it:8080/data/diet.dat", header=T)
+str(df)
+```
+```{r}
+df %>% 
+  ggplot(aes(x=diet, y=cTime)) +
+  geom_boxplot()
+```
+
+```{r}
+df %>% summarise(n=n(), `mean(cTime)`=mean(cTime), `sd(cTime)`=sd(cTime), .by=diet)
+```
+
+Le diete B e C hanno solo 6 campioni: troppo pochi per rimuovere degli outlier.
+
+Procediamo con l'analisi della varianza:
+
+```{r}
+df.lm <- lm(cTime~diet, data=df)
+anova(df.lm)
+```
+Verifichiamo i residui:
+
+```{r}
+df <- df %>% add_residuals(df.lm)
+df %>% ggplot(aes(x=runOrder, y=resid)) +
+  geom_point()
+
+df %>% ggplot(aes(x=cTime, y=resid)) +
+  geom_point()
+
+df %>% ggplot(aes(sample=resid)) +
+  geom_qq() + geom_qq_line()
+```
+
+Dai residui non si nota nessun pattern, e i residui stessi sono normali. Possiamo quindi accettare il modello proposto.
+
+Per verificare quali differenze siano significative, procediamo con un test di Tukey:
+
+```{r}
+df.tuk <- TukeyHSD(aov(cTime ~ diet, data = df))
+df.tuk$diet %>%
+  as_tibble(rownames = "pairs") %>%
+  mutate(pairs = factor(pairs, ordered = T, levels = rev(pairs))) %>%
+  ggplot(aes(x = pairs)) +
+  geom_errorbar(aes(ymin = lwr, ymax = upr)) +
+  geom_point(aes(y = diff)) +
+  coord_flip() +
+  labs(y = "Differenze tra le medie", x = "Coppie")
+```
+
+# Visualizzazioni
+
+Consideriamo il dataset `mpg` fornito da `tidyverse`:
+
+```{r}
+mpg
+```
+
+Le colonne `cty` e `hwy` sono il consumo in miglia per gallone (mpg) in città o su autostrada. Convertiamo in unità SI:
+
+```{r}
+mpg_to_kml <- function(v) v * 1.609 / 3.78541
+mpg <- mpg %>% 
+  mutate(cty=mpg_to_kml(cty), hwy=mpg_to_kml(hwy))
+```
+
+Procediamo ora con qualche grafico:
+
+```{r}
+mpg %>% ggplot(aes(x=displ, y=hwy)) +
+  geom_point()
+```
+```{r}
+ggplot(mpg, aes(x = displ, y = hwy)) +
+  geom_point() +
+  geom_point(
+    data = mpg |> filter(displ > 5.5 & hwy > 8),
+    color = "red",
+    size = 4
+  )
+```
+I punti in rosso sembrano stare fuori dalla tendenza generale. Per scoprire come mai coloriamo i punti in funzione della classe di vettura:
+
+```{r}
+mpg %>% ggplot(aes(x=displ, y=hwy, color=class)) +
+  geom_point()
+```
+
+Si osserva che i punti fuori tendenza sono associati a vetture sportive le quali, a parità di cilindrata, tipicamente sono più leggere, e quindi consumano meno.
+
+```{r}
+mpg %>% ggplot(aes(x=displ, y=hwy, color=class, size=cty)) +
+  geom_point()
+```
+Linee di tendenza con intervalli di confidenza possono essere aggiunte con `geom_smooth()`, accettando il metodo di regressione di default (che è una regressione LOESS, cioè *Locally Estimated Scatterplot Smoothing*, cioè una regressione polinomiale localizzata).
+
+```{r}
+mpg %>% ggplot(aes(x=displ, y=hwy)) +
+  geom_point(aes(color = class)) +
+  geom_smooth()
+
+mpg %>% ggplot(aes(x=displ, y=hwy)) +
+  geom_point(aes(color = class)) +
+  geom_smooth(aes(group=class, color = class))
+```
+Quando i grafici diventano troppo complessi è utile segmentarli, o *sfacettarli*, mediante `facet_wrap()`. Si noti che il primo argomento di quest'ultima funzione è di tipo `~<factor>`, dove `<factor>` è una colonna della tibble originale che contenga un fattore per il quale è possibile fattorizzare (o raggruppare) i dati stessi:
+
+```{r}
+mpg %>% ggplot(aes(x=displ, y=hwy, color=class)) +
+  geom_point() +
+  facet_wrap(~drv)
+```
+
+
+
+# Bootstrap senza `boot`
+
+Calcoliamo l'intervallo di confidenza sulla media mediante bootstrap ma senza usare al libreria boot:
+
+```{r}
+set.seed(1)
+x <- runif(500, 0, 1)
+R <- 10000
+t <- rep(0, R)
+```
+
+Ricampioniamo `R` volte il campione iniziale calcolandoci ogni volta la media
+
+```{r}
+for (i in seq_along(t)) {
+  s <- sample(x, replace=T)
+  t[i] <- mean(s)
+}
+```
+
+Valutiamo l'istogramma delle medie bootstrap così calcolate e calcoliamo anche l'intervallo di confidenza mediante i quantili. Confrontiamo con i quantili calcolati mediante il T-test:
+
+```{r}
+alpha <- 5/100
+ci <- quantile(t, c(alpha/2, 1-alpha/2))
+
+tibble(
+  i = 1:R,
+  t = t
+) %>% 
+  ggplot(aes(x=t)) + 
+  geom_histogram(bins=30, color=grey(0.5), alpha=0.5) + 
+  geom_vline(xintercept=ci, color="red", lty=2) +
+  geom_vline(xintercept=t.test(x, conf.level = 1-alpha)$conf.int, color="blue", lty=2)
+```
+

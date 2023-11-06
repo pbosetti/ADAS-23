@@ -5,3 +5,9 @@
 
 *.pdf
 *.log
+*.html
+*.docx
+
+!images/*.pdf
+
+test.csv
