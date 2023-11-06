@@ -8,9 +8,7 @@ output: pdf_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(
   echo = TRUE,
-  warning = FALSE,
-  fig.width = 4,
-  fig.height = 2
+  warning = FALSE
 )
 library(tidyverse)
 library(modelr)
