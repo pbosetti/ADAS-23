@@ -8,6 +8,7 @@ author:
 date: "`r Sys.Date()`"
 company: "Università di Trento, Dipartimento di Ingegneria Industriale"
 output: memor::pdf_memo
+classoption: a4paper
 number_sections: true
 libertine: true
 toc: true
@@ -35,6 +36,15 @@ knitr::opts_chunk$set(
   tidy.opts  = list(width.cutoff=I(75)) # massima larghezza codice nei chunk
 )
 ```
+
+# Contenuto atteso
+
+Il report di calibrazione deve contenere le seguenti sezioni:
+
+1. Descrizione dello strumento e della caratteristica statica
+2. Descrizione della campagna sperimentale di taratura
+3. Analisi dei dati, regressione e analisi dei residui
+4. Conclusione e descrizione della caratteristica statica regredita
 
 # Descrizione dell'esperimento di calibrazione
 
