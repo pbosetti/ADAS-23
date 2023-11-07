@@ -1,0 +1,287 @@
+---
+title: "Misura e taratura"
+author: "Paolo Bosetti"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(patchwork)
+library(modelr)
+library(PearsonDS)
+```
+
+# Taratura di un dinamometro a mensola
+
+Ricordiamo che la caratteristica statica del dinamometro a mensola è:
+
+$$
+V=3/2GV_i\frac{lG_F}{EBH^2}F+V_0 = V_0+ KF
+$$
+
+Definiamo la lista dei parametri:
+
+```{r}
+parameters <- list(
+  G = 10,
+  Vi = 12,
+  l = 300,
+  E = 200,
+  B = 20,
+  H = 2,
+  V0 = 1
+)
+```
+
+Definiamo le funzioni per la creazione della tabella dati:
+
+* Gauge factor, funzione lineare della temperatura:
+```{r}
+Gf <- function(Temp, G0 = 0.05, T0 = 20, k = 0.01) G0 + k*(Temp - T0)
+```
+
+* Coefficiente di primo grado nella caratteristica statica:
+```{r}
+K <- function(Temp, params) with(params, 3/2 * G * Vi * (l * Gf(Temp)) / (E * B * H^2))
+```
+
+* Modello della caratteristica statica, funzione di `F` e della temperatura:
+```{r}
+model <- function(F, Temp, params) K(Temp, params) * F + params$V0
+```
+
+
+* Andamento della temperatura: costante fino a 4 h, poi incremento esponenziale fino a 25°C con costante di tempo pari a 2 h. Nell'ipotesi dell'esperimento simulato questo è un **fattore ignoto e incontrollato**, del quale cioè lo sperimentatore non ha alcuna conoscenza, né alcun modo di accorgersi del suo effetto:
+```{r}
+temp <- function(time, t0 = 4, T0 = 20, dT = 5, tau = 2) {
+  ifelse(time < t0, T0, T0 + dT * (1 - exp(-(time - t0)/tau)))
+} 
+```
+
+Verifichiamo le funzioni:
+
+```{r}
+p1 <- ggplot() +
+  geom_function(fun = \(t) temp(t), xlim=c(0, 20)) +
+  labs(x="Tempo (h)", y="Temperatura (°C)")
+
+p2 <- ggplot() +
+  geom_function(fun = \(F) model(F, 20, parameters), xlim=c(0, 20)) +
+  labs(x="Forza (N)", y="Tensione (V)")
+
+p1 + p2
+
+```
+
+Simuliamo l'esperimento per 50 valori di massa ugualmente distribuiti tra 10 e 100 N. **Non casualizziamo** la sequenza.
+```{r}
+set.seed(120)
+N <- 50
+duration <- 8
+
+data <- tibble(
+  t     = seq(0, duration, length.out=N),
+  Temp  = temp(t),
+  Gf    = Gf(Temp),
+  Force = seq(10, 100, length.out=N),
+  Vn    = model(Force, Temp, parameters),
+  V     = Vn + rnorm(N, 0, 0.5)
+)
+```
+
+Plottiamo i dati ottenuti:
+
+```{r}
+data %>% 
+  ggplot(aes(x=Force, y=V)) +
+  geom_point() +
+  geom_hline(yintercept=parameters$V0, lty=2, color="red") +
+  labs(x="Forza (N)", y="Tensione (V)")
+
+```
+Regressione con un modello lineare:
+
+```{r}
+data.lm <- lm(V ~ Force, data=data)
+summary(data.lm)
+```
+Verifichiamo i residui:
+
+```{r}
+data <- data %>% 
+  add_residuals(model = data.lm) %>% 
+  add_predictions(model = data.lm)
+
+p1 <- data %>% 
+  ggplot(aes(x=Force)) +
+  geom_point(aes(y=V)) + 
+  geom_line(aes(y=pred))
+
+p2 <- data %>% 
+  ggplot(aes(x=Force)) +
+  geom_point(aes(y=resid))
+
+p1+p2
+```
+Il modello di primo grado sembra insufficiente, quindi aumentiamo il grado del polinomio al secondo:
+
+```{r}
+data.lm <- lm(V ~ poly(Force, 2, raw=T), data=data)
+summary(data.lm)
+```
+
+```{r}
+data <- data %>% 
+  add_residuals(model = data.lm) %>% 
+  add_predictions(model = data.lm)
+
+p1 <- data %>% ggplot(aes(x=Force)) +
+  geom_point(aes(y=V)) + 
+  geom_line(aes(y=pred))
+
+p2 <- data %>% ggplot(aes(x=Force)) +
+  geom_point(aes(y=resid)) 
+
+p1 + p2
+
+shapiro.test(data$resid)
+```
+Potremmo aumentare il grado del polinomio, finché ogni pattern sui residui sia completamente scomparso. Tuttavia il modello regredito sappiamo che è sbagliato (perché dovrebbe essere lineare) solo perché abbiamo creato noi i dati in simulazione; nel caso reale, uno sperimentatore non avrebbe modo di accorgersi del problema.
+
+
+# Casualizzazione
+
+L'effetto della temperatura può invece essere notato se le misurazioni vengono condotte in ordine casuale:
+
+```{r}
+set.seed(120)
+data <- data %>% 
+  mutate(
+    Force = sample(Force),
+    Vn    = model(Force, Temp, parameters),
+    V     = Vn + rnorm(N, 0, 0.5)
+  )
+
+data %>% 
+  ggplot(aes(x=Force, y=V)) + 
+  geom_point() + 
+  geom_hline(yintercept = parameters$V0, lty=2)
+
+```
+
+Si osserva che l'andamento è lineare, seppur con una varianza in aumento.
+
+```{r}
+data.lm <- lm(V ~ Force, data=data)
+summary(data.lm)
+```
+Studiando i residui in funzione del tempo ci accorgiamo che tendono ad aumentare dopo circa 4 ore:
+
+```{r}
+data %>% 
+  add_residuals(model=data.lm) %>% 
+  ggplot(aes(x=t, y=resid)) + 
+  geom_point()
+```
+Coloriamo i punti per tempo di acquisizione: l'effetto è ancora più evidente:
+
+```{r}
+data %>% 
+  ggplot(aes(x=Force, y=V)) + 
+  geom_point(aes(color=t)) + 
+  geom_hline(yintercept = parameters$V0, lty=2) +
+  scale_color_viridis_b()
+```
+
+Rifacciamo quindi l'analisi scartando tuti i punti acquisitio dopo 4 ore:
+
+```{r}
+data.f <- data %>% 
+  filter(t < 4) 
+
+data.f.lm <- lm(V~Force, data=data.f)
+summary(data.f.lm)
+
+data.f %>% 
+  add_predictions(model=data.f.lm) %>% 
+  ggplot(aes(x=Force, y=V)) + 
+  geom_point() + 
+  geom_line(aes(y=pred), color="red", lty=2) +
+  geom_hline(yintercept = parameters$V0, lty=2) 
+
+data.f %>% 
+  add_residuals(model=data.f.lm) %>% 
+  ggplot(aes(x=Force, y=resid)) + 
+  geom_point()
+```
+
+# Monte Carlo
+
+Generiamo set di dati note che siano le distribuzioni dei parametri originari:
+
+```{r}
+set.seed(0)
+N <- 10000
+rbar <- 120
+ur <- 0.5
+lbar <- 450
+ul <- 0.5
+
+# Parametri distribuzione di Pearson
+params <- list(
+  mean = lbar,
+  variance = ul,
+  skewness = 1,
+  kurtosis = 5
+)
+
+data <- tibble(
+  r = rnorm(N, rbar, ur),
+  l = rpearson(N, moments=params)
+)
+```
+
+Verifichiamo gli istogrammi:
+
+```{r}
+data %>% 
+  ggplot(aes(x=r)) + 
+  geom_histogram(binwidth = ur/5, fill=gray(0.5), color="black") + 
+  geom_vline(xintercept=rbar, lty=2) + 
+  geom_vline(xintercept=c(-ur, ur) + rbar, lty=2, color="red") 
+
+data %>% 
+  ggplot(aes(x=l)) + 
+  geom_histogram(binwidth = ul/5, fill=gray(0.5), color="black") + 
+  geom_vline(xintercept=lbar, lty=2) + 
+  geom_vline(xintercept=c(-ul, ul) + lbar, lty=2, color="red")
+
+```
+
+Calcoliamo il campione di volumi risultanti:
+
+```{r}
+data <-  data %>% 
+  mutate(
+    V = pi * r ^ 2 * l /1e6
+  )
+```
+
+Il volume medio e l'incertezza sul volume sono la media e la deviazione standard del campione di volumi così calcolati:
+
+```{r}
+vbar <- mean(data$V)
+uv <- sd(data$V)
+
+data %>% 
+  ggplot(aes(x=V)) +
+  geom_histogram(binwidth = s/5, fill=gray(0.5), color="black") + 
+  geom_vline(xintercept=vbar, lty=2) + 
+  geom_vline(xintercept=c(-uv, uv) + vbar, lty=2, color="red")
+
+vbar
+uv
+```
+
