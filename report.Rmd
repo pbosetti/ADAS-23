@@ -10,7 +10,7 @@ company: "Dipartimento di Ingegneria Industriale, corso di Misure Industriali"
 output: memor::pdf_memo
 classoption: a4paper
 number_sections: true
-libertine: true
+libertine: false
 toc: true
 lof: true
 lot: false
@@ -22,7 +22,7 @@ header-includes:
 # Caricamento librerie
 library(knitr)
 library(kableExtra)
-library(ggplot2)
+library(tidyverse)
 # Impostazioni output
 knitr::opts_chunk$set(
 	fig.align  = "left",        # allineamento figure
@@ -36,6 +36,16 @@ knitr::opts_chunk$set(
   tidy.opts  = list(width.cutoff=I(75)) # massima larghezza codice nei chunk
 )
 ```
+
+# Setup
+
+Questo report è basato sulla libreria `memor`. Al momento (Novembre 2023), la versione online del pacchetto è difettosa, ed è quindi necessario installare la versione di sviluppo, più aggiornata:
+
+```{r eval=FALSE, include=TRUE}
+install.packages("devtools")
+devtools::install_git("hebrewseniorlife/memor")
+```
+
 
 # Contenuto atteso
 
