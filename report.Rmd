@@ -43,7 +43,7 @@ Questo report è basato sulla libreria `memor`. Al momento (Novembre 2023), la v
 
 ```{r eval=FALSE, include=TRUE}
 install.packages("devtools")
-devtools::install_git("hebrewseniorlife/memor")
+devtools::install_github("hebrewseniorlife/memor")
 ```
 
 
