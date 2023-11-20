@@ -1,0 +1,443 @@
+---
+title: "Piani Fattoriali"
+author: "Paolo Bosetti"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(modelr)
+library(patchwork)
+library(metR)
+```
+
+# Vita di un utensile
+
+Vogliamo studiare mediante un piano fattoriale la vita di un utensile da tornitura in funzione dell'angolo di spoglia e della velocità di taglio, entrambi considerati su tre livelli.
+
+## Preparazione griglia di test
+
+```{r}
+df <- expand.grid(
+  Angle = c(15, 20, 25),
+  Speed = c(125, 150, 175),
+  Repeat = c(1, 2),
+  Response = NA
+) %>% 
+  mutate(
+    StdOrder = 1:n(),
+    RunOrder = sample(StdOrder),
+    .before = Angle
+  ) 
+
+df %>% 
+  arrange(RunOrder) %>% 
+  write_csv("experimental_plan.csv")
+```
+
+## Conduzione esperimenti
+
+Si passa il file CSV a chi effettua la campagna sperimentale per la raccolta dei valori di vita utensile.
+
+## Importazione dati e analisi del modello statistico
+
+Importiamo la tabella dati completa:
+
+```{r}
+df <- read_table("http://repos.dii.unitn.it:8080/data/cutting.dat")
+```
+
+Creiamo un modello lineare completo:
+
+```{r}
+df.lm <- lm(Response~Angle*Speed*I(Angle^2)*I(Speed^2), data=df)
+anova(df.lm)
+```
+
+## Verificare l'adeguatezza del modello (MAC)
+
+```{r}
+df <- add_residuals(df, df.lm)
+
+df %>% 
+  ggplot(aes(x=Angle, y=resid)) + geom_point()
+
+df %>% 
+  ggplot(aes(x=Speed, y=resid)) + geom_point()
+
+df %>% 
+  ggplot(aes(x=RunOrder, y=resid)) + geom_point()
+```
+Non si evidenziano pattern significativi, quindi possiamo riformulare il modello rimuovendo i termini che risultano non significativi nella tabella ANOVA.
+
+
+## Riformulare il modello
+
+
+
+```{r}
+df.lm2 <- lm(Response ~ Angle*Speed + Angle*I(Speed^2) + I(Angle^2):I(Speed^2), data=df)
+
+df <- add_residuals(df, df.lm2)
+
+df %>% 
+  ggplot(aes(x=Angle, y=resid)) + geom_point()
+
+df %>% 
+  ggplot(aes(x=Speed, y=resid)) + geom_point()
+
+df %>% 
+  ggplot(aes(x=RunOrder, y=resid)) + geom_point()
+```
+
+Possiamo accettare il nuovo modello e preparare una superficie di risposta.
+
+```{r}
+rs <- expand.grid(
+  Angle = seq(15, 25, length.out=20),
+  Speed = seq(125, 175, length.out=20)
+)
+
+add_predictions(rs, df.lm) %>% 
+  ggplot(aes(x=Angle, y=Speed, z=pred)) + 
+  geom_contour_filled(bins=20)
+  
+```
+
+## Piano fattoriale $2^2$
+
+Reazione chimica, fattori:
+
+* A: concentrazione reagente
+* B: quantità di catalizzatore
+
+Resa: quantità di prodotto
+
+```{r}
+df <- expand.grid(
+  A = c(-1, 1),
+  B = c(-1, 1),
+  rep = 1:3
+) %>% 
+  mutate(
+    StdOrder = 1:n(),
+    RunOrder = sample(StdOrder),
+    .before = A
+  )
+
+df$y <- c(
+  28, 36, 18, 31,
+  25, 32, 19, 30,
+  27, 32, 23, 29
+)
+
+df %>% slice_head(n=6)
+```
+
+Aggiungiamo residui e predizioni per verificare l'adeguatezza:
+
+```{r}
+df.lm <- lm(y~A*B, data=df)
+df <- add_residuals(df, df.lm)
+df <- add_predictions(df, df.lm)
+
+df %>% slice_head(n=6)
+```
+
+Eseguiamo i grafici dei residui per verificare l'assenza di pattern. Per farlo, questa volta ci costruiamo una funzione di appoggio:
+
+```{r}
+# Attenzione: !!sym(f) significa: "prendi la stringa f e convertila in un simbolo utilizzabile nelle estetiche ggplot"
+rp <- function(t, f) t %>% ggplot(aes(x=!!sym(f), y=resid)) + geom_point()
+
+# Creiamo una griglia di grafici con la libreria patchwork:
+(rp(df, "RunOrder") + rp(df, "A")) /
+(rp(df, "B") + rp(df, "pred"))
+```
+
+Verifichiamo anche la distribzione dei residui:
+
+```{r}
+df %>% 
+  ggplot(aes(sample=resid)) + 
+  geom_qq() +
+  geom_qq_line()
+```
+
+Possiamo ora accettare il modello e verificare l'ANOVA:
+
+```{r}
+anova(df.lm)
+```
+Rivediamo il modello rimuovendo i termini non significativi:
+
+```{r}
+df.lm <- lm(y~A+B, data=df)
+anova(df.lm)
+```
+Di nuovo, verifichiamo i residui:
+
+```{r}
+(rp(df, "RunOrder") + rp(df, "A")) /
+(rp(df, "B") + rp(df, "pred"))
+```
+
+Va tutto bene, quindi possiamo realizzare la superficie di risposta. Nel grafico a contorno riportiamo anche due assi secondari per A e B che riportino le unità fisiche anziché quelle codificate, mediante una ri-scalatura da (-1,1) all'intervallo di distinazione:
+
+```{r}
+rs <- expand.grid(
+  A = seq(-1, 1, 0.1), 
+  B = seq(-1, 1, 0.1)
+) %>% 
+  add_predictions(df.lm)
+
+rs %>% 
+  ggplot(aes(x=A, y=B, z=pred)) +
+  geom_contour_filled() + 
+  scale_x_continuous(
+    sec.axis = sec_axis(
+      \(x) scales::rescale(x, from=c(-1, 1), to=c(15, 25)),
+      name="Reagente (%)"
+    )
+  ) +
+  scale_y_continuous(
+    sec.axis = sec_axis(
+      \(x) scales::rescale(x, from=c(-1, 1), to=c(1, 5)),
+      name="Catalizzatore (g)"
+    )
+  )
+```
+
+
+## Wafer etching
+
+Vediamo ora un piano fattoriale $2^3$ ripetuto due volte: vogliamo studiare la velocità di erosione in un impianto di plasma etching per wafer in silicio.
+
+Fattori:
+
+* A: distanza wafer-elettrodo
+* B: flusso gas inerte
+* C: potenza segnale RF
+
+Resa: velocità di erosione
+
+
+```{r}
+df <- expand.grid(
+  A=c(-1,1),
+  B=c(-1,1),
+  C=c(-1,1),
+  rep=1:2
+) %>% 
+  mutate(
+    StdOrder = 1:n(),
+    RunOrder = sample(StdOrder),
+    .before=A
+  ) 
+
+df$y <- c(
+  550, 669, 633, 642, 1037, 749, 1075, 729,
+  604, 650, 601, 635, 1052, 868, 1063, 860
+)
+
+df %>% slice_head(n=6)
+```
+
+Verifichiamo come sempre i residui di un modello lineare completo:
+
+```{r}
+df.lm <- lm(y~A*B*C, data=df)
+df <- add_residuals(df, df.lm)
+df <- add_predictions(df, df.lm)
+
+(rp(df, "RunOrder") + rp(df, "A")) /
+(rp(df, "B") + rp(df, "pred")) +
+rp(df, "C")
+```
+
+Valutiamo la significatività con l'analisi della varianza. Questa volta anziché la funzione `anova()` utilizziamo `summary()`, che riporta comunque il *p*-value e la significatività, ma aggiunge il valore del coefficiente di determinazione $R^2$, il quale può essere utilizzato per confrontare diversi modelli di regressione:
+
+```{r}
+#anova(df.lm)
+summary(df.lm)
+```
+
+Risultano significativi solo `A, C, A:C`: riformuliamo quindi il modello e verifichiamo che i residui non abbiano pattern significativi.
+
+```{r}
+df.lm <- lm(y~A*C, data=df)
+df <- add_residuals(df, df.lm)
+df <- add_predictions(df, df.lm)
+
+(rp(df, "RunOrder") + rp(df, "A")) /
+(rp(df, "C") + rp(df, "pred"))
+```
+
+L'analisi della varianza mostra un $R^2$ comunque alto (quindi la regressione è buona) ma leggermente inferiore del precedente: questo significa che il modello completo soffriva evidentemente di *overfitting*.
+
+```{r}
+summary(df.lm)
+```
+
+Possiamo completare l'analisi con la superficie di risposta sul piano $(A,C)$:
+
+```{r}
+expand.grid(
+  A = seq(-1, 1, 0.1),
+  C = seq(-1, 1, 0.1)
+) %>% 
+  add_predictions(df.lm) %>% 
+  ggplot(aes(x=A, y=C, z=pred)) +
+  geom_contour_filled() + 
+  scale_x_continuous(
+    sec.axis = sec_axis(
+      \(x) scales::rescale(x, from=c(-1, 1), to=c(0.8, 1.2)),
+      name="Distanza (mm)"
+    )
+  ) +
+  scale_y_continuous(
+    sec.axis = sec_axis(
+      \(x) scales::rescale(x, from=c(-1, 1), to=c(275, 325)),
+      name="Potenza RF (W)"
+    )
+  )
+
+```
+
+## Misure ripetute
+
+Un team di ingegneri di un produttore di semiconduttori ha eseguito un progetto fattoriale 24 in un forno di ossidazione verticale. Quattro wafer sono "impilati" nel forno e la variabile di risposta di interesse è lo spessore dell'ossido sui wafer. I quattro fattori di progettazione sono temperatura (A), tempo (B), pressione (C) e flusso di gas (D). L'esperimento viene condotto caricando quattro wafer nel forno, impostando le variabili di processo sulle condizioni di prova richieste dal progetto sperimentale, processando i wafer e quindi misurando lo spessore dell'ossido su tutti e quattro i wafer.
+
+* A: temperatura
+* B: tempo
+* C: pressione
+* D: flusso gas
+
+Resa: spessore di ossido
+
+```{r}
+df <- expand.grid(
+  A=c(-1, 1),
+  B=c(-1, 1),
+  C=c(-1, 1),
+  D=c(-1, 1)
+) %>% 
+  mutate(
+    StdOrder=1:n(),
+    RunOrder=sample(StdOrder),
+    .before=A
+  )
+
+df %>% slice_head(n=6)
+```
+
+Le misure di spessore, quatrto per trattamento, sono caricate da un file separato:
+
+```{r}
+y <- read_csv("http://repos.dii.unitn.it:8080/data/duplicate.csv")
+y %>% slice_head(n=4)
+```
+
+Si noti che si tratta di **misure ripetute** e non di **esperimenti ripetuti**. Quindi non è lecito utilizzare i dati in `y` per realizzare un piano fattoriale 2^4 replicato 4 volte, ma possiamo calcolare lo spessore medio per ogni trattamento e la sua varianza, e valutare in un successivo momento un piano fattoriale in cui la risposta sia la varianza dello spessore.
+
+Per procedere uniamo le due tabelle e applichiamo le funzioni `mean()` e `var()` **per righe** sulle colonne da `t1` a `t4`:
+
+```{r}
+df <- cbind(df, y) %>% 
+  rowwise() %>% # il successivo mutate opererà per righe
+  mutate(
+    t=mean(c_across(t1:t4)),
+    s=var(c_across(t1:t4)) %>% round(2)
+  ) %>% 
+  ungroup() #necessario per togliere l'informazione sul raggruppamento per righe
+
+df
+```
+
+A questo punto il piano fattoriale **non è replicato** quindi devo procedere con il metodo di Daniel. Per comodità, visto che riutilizzerò il motodo in seguito, mi costruisco una funzione:
+
+```{r}
+df.lm <- lm(t~A*B*C*D, data=df)
+
+dp <- function(model, alpha=0.5, xlim=c(-3,3)) {
+  e <- effects(model)
+  tibble(
+    term = names(e),
+    value = as.numeric(e)
+  ) %>% 
+    slice_tail(n=length(e) - 1) %>% 
+    ggplot(aes(sample=value)) + 
+    stat_qq() +
+    geom_qq_line() +
+    geom_label(aes(y=value, x=xlim[1], label=term), hjust="left", alpha=alpha) +
+    geom_hline(aes(yintercept=value), alpha=alpha) +
+    coord_cartesian(xlim=xlim)
+}
+
+dp(df.lm, alpha=0.25)
+
+```
+Rivedo il modello:
+
+```{r}
+df.lm <- lm(t~A*B+A*C, data=df)
+summary(df.lm)
+```
+Verifico i residui:
+
+```{r}
+df <- add_residuals(df, df.lm)
+df <- add_predictions(df, df.lm)
+
+(rp(df, "StdOrder") + rp(df, "RunOrder") + rp(df, "pred")) /
+  (rp(df, "A") + rp(df, "B") + rp(df, "C"))
+```
+Costruisco la superficie di risposta, marcando in rosso le due iso-linee che delimitano l'intervallo di tolleranza sullo spessore $[390, 410]$:
+
+```{r}
+rs <- expand.grid(
+  A=seq(-1, 1, 0.1),
+  B=seq(-1, 1, 0.1),
+  C=c(-1, 0, 1)
+) %>% 
+  add_predictions(df.lm, var="t")
+
+rs %>% 
+  ggplot(aes(x=A, y=B, z=t)) +
+  geom_contour() +
+  geom_contour(breaks=c(390,410), color="red") +
+  geom_label_contour() +
+  facet_wrap(~C)
+```
+
+Ora passo ad analizzare la risposta sulla varianza dello spessore:
+
+```{r}
+df.lms <- lm(s~A*B*C*D, data=df)
+dp(df.lms, 0.25)
+```
+
+Non ci sono molti termini significativi, significa che in generale la varianza è poco dipendente dai fattori. Tuttavia possiamo accettare comunque i fattori $A$ e $B$:
+
+```{r}
+df.lms <- lm(s~B + A, data=df)
+anova(df.lms)
+```
+Passiamo a valutare la superficie di risposta complessiva, aggiungendo anche le fasce di varianza tra 2 e 5:
+
+```{r}
+rs <- rs %>%
+  add_predictions(df.lms, var="s")
+
+rs %>% 
+  ggplot(aes(x=A, y=B)) +
+  geom_contour_filled(aes(z=s), breaks=2:5) +
+  geom_contour(aes(z=t)) +
+  geom_contour(aes(z=t), breaks=c(390, 410), color="red") +
+  geom_label_contour(aes(z=t)) + 
+  facet_wrap(~C)
+```
+
+Quindi la zona compresa tra le due linee rosse e la fascia di varianza desiderata è il **dominio operativo** del processo, cioè la combinazione di fattori $A,B,C$ in cui il processo va regolato per rispettare le tolleranze richieste.

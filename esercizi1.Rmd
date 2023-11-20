@@ -1,0 +1,210 @@
+---
+title: "Esercizi Vari"
+author: "Paolo Bosetti"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  fig.dim = c(6,4)/0.8,
+  out.height = "2.5in",
+  fig.align = "center"
+)
+library(tidyverse)
+library(modelr)
+```
+
+# Resistenza a compressione di cemento
+
+```{r}
+df <- read.table("http://repos.dii.unitn.it:8080/data/mortar.dat", header=T)
+df <- df %>% mutate(
+  Mortar = factor(Mortar)
+)
+str(df)
+```
+```{r}
+df %>% 
+  ggplot(aes(y=Strength, group=Mortar)) +
+  geom_boxplot()
+```
+```{r}
+var.test(Strength~Mortar, data=df)
+```
+```{r}
+t.test(Strength~Mortar, data=df, var.equal=T)
+```
+# Misure di durezza Vickers
+
+```{r}
+df <- read.table("http://repos.dii.unitn.it:8080/data/hardness2.dat", header=T)
+```
+
+```{r}
+df <- df %>% pivot_longer(!Specimen, values_to="hardness", names_to="tip")
+```
+
+```{r}
+df %>% 
+  ggplot(aes(y=hardness, group=tip)) +
+  geom_boxplot()
+```
+```{r}
+t.test(hardness~tip, data=df, var.equal=var.test(hardness~tip, data=df)$p.value > 0.05)
+```
+
+```{r}
+t.test(hardness~tip, data=df, paired=T)
+```
+
+# Dieta e coagulazione
+
+```{r}
+df <- read.table("http://repos.dii.unitn.it:8080/data/diet.dat", header=T)
+df %>% 
+  ggplot(aes(y=cTime, x=diet)) + 
+  geom_boxplot()
+```
+```{r}
+df %>% 
+  group_by(diet) %>% 
+  summarise(n=n(), `mean(cTime)`=mean(cTime), `sd(cTime)`=sd(cTime)) %>% 
+  knitr::kable()
+```
+
+
+```{r}
+df.lm <- lm(cTime~diet, data=df)
+anova(df.lm)
+```
+
+```{r}
+df <- df %>% add_residuals(df.lm)
+
+df %>% 
+  ggplot(aes(x=runOrder, y=resid)) +
+  geom_point()
+
+df %>% 
+  ggplot(aes(x=diet, y=resid)) +
+  geom_point()
+
+df %>% 
+  ggplot(aes(sample=resid)) +
+  geom_qq() + geom_qq_line()
+
+shapiro.test(df$resid)
+```
+
+```{r}
+TukeyHSD(aov(cTime~diet, data=df))$diet %>% 
+  as_tibble(rownames="pairs") %>% 
+  ggplot(aes(x=pairs)) +
+  geom_errorbar(aes(ymin=lwr, ymax=upr)) +
+  geom_point(aes(y=diff)) +
+  geom_hline(yintercept = 0, lty=2) +
+  coord_flip() + 
+  labs(title="Tukey's test, 95%")
+
+TukeyHSD(aov(cTime~diet, data=df)) %>% plot()
+```
+
+# Visualizzazioni
+
+```{r}
+mpg
+```
+
+```{r}
+mpg_to_kml <- function(v) v * 1.609 / 3.78541
+mpg.si <- mpg %>% 
+  mutate(
+    cty = mpg_to_kml(cty),
+    hwy = mpg_to_kml(hwy) 
+  )
+```
+
+```{r}
+mpg.si %>% 
+  ggplot(aes(x=displ, y=hwy)) + 
+  geom_point() +
+  geom_point(
+    data=filter(mpg.si, displ>5.5 & hwy > 8),
+    color="red",
+    size = 4
+  )
+```
+
+```{r}
+mpg.si %>% 
+  ggplot(aes(x=displ, y=1/hwy, color=class)) +
+  geom_point()
+```
+
+```{r}
+mpg.si %>% 
+  ggplot(aes(x=displ, y=1/hwy, color=class, size=1/cty)) +
+  geom_point()
+```
+
+```{r}
+mpg.si %>% 
+  ggplot(aes(x=1/cty, y=1/hwy, color=class)) +
+  geom_point()
+```
+
+```{r}
+mpg.si %>% 
+  ggplot(aes(x=displ, y=hwy)) +
+  geom_point(aes(color=class)) + 
+  geom_smooth()
+```
+
+```{r warning=FALSE}
+mpg.si %>% 
+  ggplot(aes(x=displ, y=hwy)) +
+  geom_point(aes(color=class)) + 
+  geom_smooth(aes(group=class, color=class))
+```
+
+```{r}
+mpg.si %>% 
+  ggplot(aes(x=displ, y=hwy, color=class)) +
+  geom_point() + 
+  facet_wrap(~drv)
+```
+
+# Bootstrap senza la libreria `boot`
+
+```{r}
+set.seed(1)
+x <- runif(500, 0, 1)
+(x.ci_t <- t.test(x)$conf.int)
+```
+
+```{r}
+R <- 10000
+
+t <- rep(NA, R)
+
+for (i in seq_along(t)) sample(x, replace=T) %>% mean() -> t[i]
+```
+
+
+```{r}
+alpha <- 5/100
+ci <- quantile(t, c(alpha/2, 1-alpha/2))
+
+tibble(
+  i = seq_along(t),
+  t = t
+) %>% 
+  ggplot(aes(x=t)) +
+  geom_histogram(bins=30, color=gray(0.5), alpha=0.5) +
+  geom_vline(xintercept = ci, color="red", lty=2) +
+  geom_vline(xintercept = mean(x), color="red") +
+  geom_vline(xintercept = x.ci_t, color="blue", lty=2)
+```
+
