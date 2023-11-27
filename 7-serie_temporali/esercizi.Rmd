@@ -100,6 +100,7 @@ ts(rnorm(20), start = c(2023, 11), frequency = 12)
 ```{r}
 plot(s1)
 ```
+
 Inizio, fine e frequenza possono essere estratte con le relative funzioni:
 
 ```{r}
