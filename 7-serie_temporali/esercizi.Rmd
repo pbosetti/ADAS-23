@@ -1,0 +1,120 @@
+---
+title: "Serie temporali"
+author: "Paolo Bosetti"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+```
+
+# Date
+
+In R ci sono due tipi di oggetti per memorizzare informazioni su tempo: `Date` (con risoluzione fino al giorno) e `POSIXct` (con risoluzione completa fino a frazioni di secondo).
+
+```{r}
+today <- Sys.Date()
+now <- Sys.time()
+
+today
+now
+
+class(today)
+class(now)
+```
+La libreria `lubridate` (parte del Tidyverse) dispone di numerose funzioni per la creazione e la modifica di oggetti temporali. Ad esempio, per creare oggetti di tipo data o tempo:
+
+```{r}
+t1 <- dmy("01-01-2023")
+t1
+t2 <- ymd("2023-6-10")
+t2
+t3 <- ymd_hm("2023/6/1 10:30")
+t3
+```
+Per estrarre componenti dalle date:
+
+```{r}
+year(t1)
+month(t2)
+wday(t3)
+```
+
+Ovviamente sono disponibili operazioni algebriche **vettorializzate** tra oggetti temporali:
+
+```{r}
+(today - t1) %>% as.numeric()
+```
+Anche queste operazioni sono facilitate dalle funzioni `libridate` come `years()`, `months()`, `weeks()`, ecc.:
+
+```{r}
+now + months(2)
+```
+È utile poter arrotondare una data ad una frazione inferiore (`floor_date()`) o superiore (`ceiling_date()`) di un certo periodo, come ad esempio:
+
+```{r}
+ceiling_date(today, "weeks")
+```
+Con l'obiettivo di trattare **serie temporali** è ovviamente importante poter costruire vettori sequenza di istanti successivi, equispaziati. Questi si ottengono con la solita funzione `seq()`:
+
+```{r}
+seq(today, to= today + months(1), by="2 days")
+seq(now, to=now + minutes(2), by="13 secs")
+```
+Si noti che per gli oggetti POSIXct il numero di decimali di default è 2. Per aumentarlo:
+
+```{r}
+options(digits.secs = 3) # fino all millisecondo
+```
+
+
+# Serie temporali
+
+In R ci sono diverse librerie per la gestione delle serie temporali. La più semplice fa parte di R base ed è la classe `ts`, per *time series*. Un oggetto `ts` si crea con la funzione `ts()`, che vuole un vettore di osservazioni e due qualsiasi tra
+
+* inizio
+* fine
+* frequenza
+
+Inizio e fine sono passati come vettori di uno o due elementi. Se gli elementi sono due, si assume l'inizio dopo un dato numero di sottoperiodi, ed il numero di sottoperiodi è calcolato sulla base della frequenza. Ad esempio:
+
+```{r}
+s1 <- ts(rnorm(20), start = 0, frequency = 10)
+s1
+```
+genera una serie temporale di 20 osservazioni, che inizia all'istante 0 e divide ogni periodo in 10 sottoperiodi.
+
+Questo tipo di struttura è a **passo temporale costante**. È spesso utilizzata per dati annuali, ad esempio: 
+
+```{r}
+ts(rnorm(20), start = c(2023, 11), frequency = 12)
+```
+
+è una serie temporale mensile che inizia all'undicesimo mese (sottoperiodo) del 2023.
+
+È possibile mettere in grafico immediatamente le serie temporali di tipo `ts` come segue:
+
+```{r}
+plot(s1)
+```
+Inizio, fine e frequenza possono essere estratte con le relative funzioni:
+
+```{r}
+start(s1)
+end(s1)
+frequency(s1)
+```
+Infine, una `st` può essere convertita in un vettore mediante `as.numeric()`:
+
+```{r}
+as.numeric(s1)
+```
+e il vettore dei tempi (che non è contenuto direttamente nel'oggetto `st`) può essere generato con la funzione `time()`:
+
+```{r}
+time(s1)
+```
+
