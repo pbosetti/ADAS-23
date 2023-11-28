@@ -9,6 +9,12 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(lubridate)
+library(xts)
+library(tsbox)
+library(astsa)
+library(forecast)
+library(zoo)
+library(ggfortify)
 ```
 
 # Date
@@ -118,4 +124,157 @@ e il vettore dei tempi (che non è contenuto direttamente nell'oggetto `st`) pu�
 ```{r}
 time(s1)
 ```
+
+```{r}
+s2 <- ts(tibble(
+    A=rnorm(10),
+    B=runif(10)
+  ), 
+  start = c(2023, 11), 
+  frequency = 12)
+
+s2
+```
+
+
+# Classe `xts`
+
+
+
+```{r}
+x1 <- xts(
+  tibble(A=1:8, B=rnorm(length(A))),
+  order.by = seq(
+    from = Sys.Date(),
+    to = Sys.Date() + weeks(1),
+    by = "1 days"
+  )
+)
+
+x1 %>% ts_ts()
+```
+
+```{r}
+s2 %>% ts_xts()
+```
+
+```{r}
+globtemp %>% ts_xts() -> gt
+dimnames(gt) <- list(NULL, "temp")
+gt["2000/"]
+```
+
+```{r}
+rollapply(gt, 3, mean, align="left")
+```
+
+```{r}
+gt %>% rollapply(7, sd) %>% plot()
+```
+
+```{r}
+x2 <- xts(
+  rnorm(365),
+  order.by = seq(
+    from = ymd("2021-1-1"),
+    to = ymd("2021-12-31"),
+    by = "1 days",
+  )
+)
+
+x2 %>% apply.weekly(mean) %>% plot()
+```
+```{r}
+gt %>% lag.xts(10)
+```
+
+```{r}
+gt %>% diff(differences=1) %>% plot()
+```
+## Grafici di xts con ggplot
+
+```{r warning=FALSE}
+gt2 <- gt
+gt2$mean_temp <- rollmean(gt, 9, align="center")
+
+gt2 %>% ggplot(aes(x=Index, y=temp)) +
+  geom_line() +
+  geom_line(aes(y=mean_temp), color="red") +
+  scale_x_date(
+    breaks="10 years",
+    labels=scales::label_date("%Y")
+  ) +
+  theme(
+    axis.text.x = element_text(angle=45)
+  )
+```
+
+```{r}
+gt2 %>% fortify()
+```
+
+# Modelli ARIMA
+
+Simulazione di una ST
+
+```{r}
+set.seed(0)
+ts <- arima.sim(
+  model = list(
+    ma = c(0.5, 0.49),
+    ar = c(0.7),
+    order = c(1, 1, 2)
+  ),
+  n = 150
+)
+
+plot(ts)
+```
+
+```{r}
+plot(1:10, ARMAacf(ar=c(0.5, 0.3), lag.max = 10, pacf=TRUE), typ="h")
+```
+
+```{r}
+set.seed(0)
+ari <- arima.sim(
+  model = list(
+    order = c(1, 2, 0),
+    ar = c(0.9)
+  ),
+  n = 300
+)
+
+ggtsdisplay(ari, lag.max = 50)
+
+```
+```{r}
+ggtsdisplay(diff(ari, differences = 2), lag.max = 50)
+```
+
+```{r}
+ggtsdisplay(diff(log(AirPassengers)))
+```
+```{r}
+apld <- AirPassengers %>% log() %>% diff()
+
+lag.plot(apld, lags=16, do.lines = FALSE)
+```
+```{r}
+fit <- auto.arima(AirPassengers, lambda=0, trace=F)
+```
+
+La regressione `fit` può essere passata a `ggplot()` **a patto di aver prima caricato la libreria `ggfortify`**:
+
+```{r warning=FALSE}
+forecast(fit,h=20) %>%  
+  ggplot(aes(x=Index, y=Data)) + 
+  geom_line() +
+  geom_line(aes(y=Fitted), color=grey(0.5)) +
+  geom_ribbon(aes(ymin=`Lo 80`, ymax=`Hi 80`), fill="blue", alpha = 0.5) + 
+  geom_ribbon(aes(ymin=`Lo 95`, ymax=`Hi 95`), fill="blue", alpha = 0.5) +
+  geom_line(aes(y=`Point Forecast`), color="blue") 
+
+```
+
 
