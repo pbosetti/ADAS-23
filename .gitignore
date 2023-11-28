@@ -8,6 +8,8 @@
 *.html
 *.docx
 
+hidden/*
+
 !images/*.pdf
 
 test.csv

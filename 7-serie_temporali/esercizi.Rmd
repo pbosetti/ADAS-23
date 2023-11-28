@@ -113,7 +113,7 @@ Infine, una `st` può essere convertita in un vettore mediante `as.numeric()`:
 ```{r}
 as.numeric(s1)
 ```
-e il vettore dei tempi (che non è contenuto direttamente nel'oggetto `st`) può essere generato con la funzione `time()`:
+e il vettore dei tempi (che non è contenuto direttamente nell'oggetto `st`) può essere generato con la funzione `time()`:
 
 ```{r}
 time(s1)

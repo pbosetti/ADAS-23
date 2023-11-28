@@ -11,6 +11,7 @@ library(tidyverse)
 library(modelr)
 library(patchwork)
 library(metR)
+source("my_library.R")
 ```
 
 # Vita di un utensile
@@ -149,9 +150,6 @@ df %>% slice_head(n=6)
 Eseguiamo i grafici dei residui per verificare l'assenza di pattern. Per farlo, questa volta ci costruiamo una funzione di appoggio:
 
 ```{r}
-# Attenzione: !!sym(f) significa: "prendi la stringa f e convertila in un simbolo utilizzabile nelle estetiche ggplot"
-rp <- function(t, f) t %>% ggplot(aes(x=!!sym(f), y=resid)) + geom_point()
-
 # Creiamo una griglia di grafici con la libreria patchwork:
 (rp(df, "RunOrder") + rp(df, "A")) /
 (rp(df, "B") + rp(df, "pred"))
@@ -361,21 +359,6 @@ A questo punto il piano fattoriale **non è replicato** quindi devo procedere co
 ```{r}
 df.lm <- lm(t~A*B*C*D, data=df)
 
-dp <- function(model, alpha=0.5, xlim=c(-3,3)) {
-  e <- effects(model)
-  tibble(
-    term = names(e),
-    value = as.numeric(e)
-  ) %>% 
-    slice_tail(n=length(e) - 1) %>% 
-    ggplot(aes(sample=value)) + 
-    stat_qq() +
-    geom_qq_line() +
-    geom_label(aes(y=value, x=xlim[1], label=term), hjust="left", alpha=alpha) +
-    geom_hline(aes(yintercept=value), alpha=alpha) +
-    coord_cartesian(xlim=xlim)
-}
-
 dp(df.lm, alpha=0.25)
 
 ```
@@ -441,3 +424,151 @@ rs %>%
 ```
 
 Quindi la zona compresa tra le due linee rosse e la fascia di varianza desiderata è il **dominio operativo** del processo, cioè la combinazione di fattori $A,B,C$ in cui il processo va regolato per rispettare le tolleranze richieste.
+
+
+# Impianto di filtrazione
+
+Parametri:
+
+* A: temperatura
+* B: pressione
+* C: concentrazione (formaldeide)
+* D: velocità di agitazione
+
+Resa: Velocità di filtrazione
+
+```{r}
+l <- c(-1, 1)
+dm <- expand.grid(
+  A=l, B=l, C=l, D=l  
+) %>% 
+  mutate(
+    Y=c(
+      45, 71, 48, 65, 68, 60, 80, 65,
+      43, 100, 45, 104, 75, 86, 70, 96
+    )
+  )
+
+sum(dm$Y)
+```
+Eseguo un modello lineare completo:
+
+```{r}
+dm.lm <- lm(Y~A*B*C*D, data=dm)
+dp(dm.lm)
+```
+
+```{r}
+dm.lm <- lm(Y~A*C + A*D, data=dm)
+summary(dm.lm)
+```
+
+```{r}
+dm %>% 
+  add_predictions(dm.lm) %>% 
+  ggplot(aes(x=A, y=pred, linetype=factor(C), group=factor(C))) +
+  geom_line() + 
+  geom_point() +
+  facet_wrap(~D, labeller=label_both)
+```
+Grafico di Pareto per gli effetti:
+
+```{r}
+df <- tibble(
+  fattore=names(effects(dm.lm)),
+  effetto=as.numeric(abs(effects(dm.lm)))
+) %>% 
+  filter(fattore!="" & fattore != "(Intercept)") %>% 
+  arrange(desc(effetto)) %>% 
+  mutate(
+    cum=cumsum(effetto),
+    fattore=factor(fattore, ordered=T, levels=fattore)
+  )
+
+
+df %>% 
+  ggplot(aes(x=fattore, group=1)) +
+  geom_col(aes(y=effetto)) +
+  geom_line(aes(y=cum)) + 
+  geom_point(aes(y=cum)) + 
+  scale_y_continuous(
+    sec.axis = sec_axis(
+      \(x) scales::rescale(x, from=c(0, max(df$cum)), to=c(0, 100)),
+      name="Contributo relativo (%)",
+      breaks=seq(0, 100, 10)
+    )
+  )
+```
+## CCD
+
+```{r}
+n <- rep(0, 5) # repliche in 0
+dm.c <- tibble(
+  A = n,
+  C = n,
+  D = n,
+  Y = c(91, 90, 90, 89, 91)
+)
+
+dm.c <- dm %>% add_row(dm.c)
+
+dm.c
+```
+
+```{r}
+dm.lmq <- lm(Y~A*C+A*D + I(A^2), data=dm.c)
+summary(dm.lmq)
+```
+```{r}
+dm.lmq <- lm(Y~A*C+A*D + I(C^2), data=dm.c)
+summary(dm.lmq)
+```
+# Piano Fattoriale Frazionato (PFF)
+
+Processo di litografia di circuiti stampati, dipendente da 5 parametri:
+
+* A: rapporto focale dell'ottica
+* B: tempo di esposizione
+* C: tempo di sviluppo fotoresist
+* D: parametro di dimensione della maschera
+* E: tempo di attacco chimico
+
+risposta: resa quantitativa
+
+Relazione definente: $I=ABCDE$, quindi risulta $E=ABCD$
+
+```{r}
+dm <- expand.grid(
+  A=l, B=l, C=l, D=l
+) %>% 
+  mutate(
+    E = A*B*C*D,
+    Y = c(
+      8, 9, 34, 52, 16, 22, 45, 60,
+      6, 10, 30, 50, 15, 21, 44, 63
+    )
+  )
+
+dm$Y %>% sum()
+```
+```{r}
+dm.lm <- lm(Y~A*B*C*D*E, data=dm)
+dp(dm.lm)
+```
+```{r comment=""}
+dm.lm <- lm(Y~A*B*C, data=dm)
+summary(dm.lm)
+```
+```{r}
+dm %>% 
+  add_predictions(dm.lm) %>% 
+  ggplot(aes(x=A, y=pred, linetype=factor(B), group=factor(B))) +
+  geom_line() + 
+  geom_point() + 
+  facet_wrap(~C, labeller = label_both)
+```
+
+```{r}
+pareto_chart(dm.lm)
+```
+
