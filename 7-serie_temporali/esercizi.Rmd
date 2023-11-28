@@ -64,7 +64,7 @@ now + months(2)
 ```{r}
 ceiling_date(today, "weeks")
 ```
-Con l'obiettivo di trattare **serie temporali** è ovviamente importante poter costruire vettori sequenza di istanti successivi, equispaziati. Questi si ottengono con la solita funzione `seq()`:
+Con l'obiettivo di trattare **serie temporali** è ovviamente importante poter costruire vettori sequenza di istanti successivi, equi-spaziati. Questi si ottengono con la solita funzione `seq()`:
 
 ```{r}
 seq(today, to= today + months(1), by="2 days")
@@ -73,7 +73,7 @@ seq(now, to=now + minutes(2), by="13 secs")
 Si noti che per gli oggetti POSIXct il numero di decimali di default è 2. Per aumentarlo:
 
 ```{r}
-options(digits.secs = 3) # fino all millisecondo
+options(digits.secs = 3) # fino al millisecondo
 ```
 
 
@@ -85,13 +85,13 @@ In R ci sono diverse librerie per la gestione delle serie temporali. La più sem
 * fine
 * frequenza
 
-Inizio e fine sono passati come vettori di uno o due elementi. Se gli elementi sono due, si assume l'inizio dopo un dato numero di sottoperiodi, ed il numero di sottoperiodi è calcolato sulla base della frequenza. Ad esempio:
+Inizio e fine sono passati come vettori di uno o due elementi. Se gli elementi sono due, si assume l'inizio dopo un dato numero di sotto-periodi, ed il numero di sotto-periodi è calcolato sulla base della frequenza. Ad esempio:
 
 ```{r}
 s1 <- ts(rnorm(20), start = 0, frequency = 10)
 s1
 ```
-genera una serie temporale di 20 osservazioni, che inizia all'istante 0 e divide ogni periodo in 10 sottoperiodi.
+genera una serie temporale di 20 osservazioni, che inizia all'istante 0 e divide ogni periodo in 10 sotto-periodi.
 
 Questo tipo di struttura è a **passo temporale costante**. È spesso utilizzata per dati annuali, ad esempio: 
 
@@ -99,7 +99,7 @@ Questo tipo di struttura è a **passo temporale costante**. È spesso utilizzata
 ts(rnorm(20), start = c(2023, 11), frequency = 12)
 ```
 
-è una serie temporale mensile che inizia all'undicesimo mese (sottoperiodo) del 2023.
+è una serie temporale mensile che inizia all'undicesimo mese (sotto-periodo) del 2023.
 
 È possibile mettere in grafico immediatamente le serie temporali di tipo `ts` come segue:
 
@@ -124,6 +124,7 @@ e il vettore dei tempi (che non è contenuto direttamente nell'oggetto `st`) pu�
 ```{r}
 time(s1)
 ```
+Una serie temporale può anche essere multivariata. In questo caso si usa un data frame (o una tibble) come serie di dati:
 
 ```{r}
 s2 <- ts(tibble(
@@ -135,11 +136,29 @@ s2 <- ts(tibble(
 
 s2
 ```
+Le singole colonne di un oggetto `ts` multivariato si accedono come se si trattasse di un data frame:
+
+```{r}
+s2[,2]
+```
+
+Oppure anche per nome (ma non funziona l'operatore "$"!):
+
+```{r}
+s2[,"A"]
+```
+
 
 
 # Classe `xts`
 
+La classe `xts` è un miglioramento di `ts`, dalla quale si distingue per:
 
+* avere la colonna dei tempi esplicita (anziché solo inizio, fine e frequenza); di conseguenza sono possibili anche passi temporali non costanti
+* avere un meccanismo di indicizzazione più potente per estrarre finestre temporali
+* supportare l'operatore "$" per serie multivariate
+
+Dato che la sequenza dei tempi è esplicita, in fase di creazione va specificato appunto il vettore di oggetti tempo (`date` oppure `POSIXct`), tipicamente creato mediante `seq()`:
 
 ```{r}
 x1 <- xts(
@@ -154,9 +173,13 @@ x1 <- xts(
 x1 %>% ts_ts()
 ```
 
+La libreria `tsbox` dispone di un'ampia gamma di funzioni per convertire le serie temporali in vari formati, tra i quali `ts_xts()` per convertire da `ts` a `xts` e `ts_ts()` per l'operazione opposta:
+
 ```{r}
 s2 %>% ts_xts()
 ```
+
+Si noti che `ts_xts` se la serie iniziale è monovariata imposta il nome della colonna dei valori sempre a `value`. È poi possibile cambiarlo mediante `dimnames()<-`:
 
 ```{r}
 globtemp %>% ts_xts() -> gt
@@ -164,13 +187,19 @@ dimnames(gt) <- list(NULL, "temp")
 gt["2000/"]
 ```
 
+La funzione `rollapply()` è molto potente e consente di applicare una qualsiasi funzione ad una finestra mobile; quest'ultima può essere allineata a sinistra, al centro o a destra:
+
 ```{r}
 rollapply(gt, 3, mean, align="left")
 ```
 
+Un oggetto `xts` può essere immediatamente visualizzato con `plot()`:
+
 ```{r}
 gt %>% rollapply(7, sd) %>% plot()
 ```
+
+Esistono anche le funzioni `apply.[yearly|quarterly|monthly|daily|hourly]()`, che applicano una data funzioni a una sequenza di opportuni sotto-periodi, **decimando** (cioè riducendo la dimensione) della serie originale:
 
 ```{r}
 x2 <- xts(
@@ -184,6 +213,9 @@ x2 <- xts(
 
 x2 %>% apply.weekly(mean) %>% plot()
 ```
+
+Infine, esistono gli equivalenti degli operatori *backshift* (funzione `lag.xts()`) e differenziazione $\nabla$ (funzione `diff()`):
+
 ```{r}
 gt %>% lag.xts(10)
 ```
@@ -192,6 +224,8 @@ gt %>% lag.xts(10)
 gt %>% diff(differences=1) %>% plot()
 ```
 ## Grafici di xts con ggplot
+
+Abbiamo visto sopra che un oggetto `xts` può essere messo in grafico con la funzione `plot()`. Se però si vuole personalizzare il grafico o combinarlo con altre serie è necessario usare `ggplot()`. In questo caso la colonna dei tempi si chiama `Index`:
 
 ```{r warning=FALSE}
 gt2 <- gt
@@ -209,13 +243,15 @@ gt2 %>% ggplot(aes(x=Index, y=temp)) +
   )
 ```
 
+In realtà, `ggplot()` vuole i dati sempre come data frame (o tibble). Se l'argomento non è un data frame, allora prova a convertirlo in una tibble invocando implicitamente la funzione `fortify()`. Se proviamo a farlo manualmente, scopriamo quali sono i nomi delle colonne rese disponibili come estetiche alle funzioni `aes()`:
+
 ```{r}
-gt2 %>% fortify()
+gt2 %>% fortify() %>% slice_head(n=10)
 ```
 
 # Modelli ARIMA
 
-Simulazione di una ST
+È possibile simulare una serie temporale:
 
 ```{r}
 set.seed(0)
@@ -231,9 +267,13 @@ ts <- arima.sim(
 plot(ts)
 ```
 
+È anche possibile calcolare la ACF e la PACF **teoriche** di un dato modello ARMA:
+
 ```{r}
 plot(1:10, ARMAacf(ar=c(0.5, 0.3), lag.max = 10, pacf=TRUE), typ="h")
 ```
+
+È particolarmente comoda la funzione `ggtsdisplay()` che mostra contemporaneamente la serie temporale, la ACF e la PACF:
 
 ```{r}
 set.seed(0)
@@ -248,20 +288,46 @@ ari <- arima.sim(
 ggtsdisplay(ari, lag.max = 50)
 
 ```
+
+Questo ci consente di esplorare rapidamente l'ordine di differenziazione necessario per stabilizzare la serie temporale:
+
 ```{r}
 ggtsdisplay(diff(ari, differences = 2), lag.max = 50)
 ```
 
+Per stabilizzare la serie `AirPassengers`:
+
+```{r}
+ggtsdisplay(AirPassengers)
+```
+
+dobbiamo anzitutto stabilizzare la varianza, ad esempio con il logaritmo:
+
+```{r}
+ggtsdisplay(log(AirPassengers))
+```
+
+E infine stabilizzare la media per differenziazione:
+
 ```{r}
 ggtsdisplay(diff(log(AirPassengers)))
 ```
+
+Osserviamo quindi un picchi significativi a *lag* 12, indice di una periodicità (stagionalità) a 12 mesi.
+
+La periodicità può essere verificata anche mediante i cosiddetti *lag plot*, che riportano il grafico di una serie contro se stessa per *lag* crescenti: in corrispondenza del *lag* pari al periodo, si riscontra una struttura più evidentemente lineare:
+
+
 ```{r}
 apld <- AirPassengers %>% log() %>% diff()
 
 lag.plot(apld, lags=16, do.lines = FALSE)
 ```
+
+È evidente dalle ACF che `AirPassengers` è una serie con una struttura complessa, ed è difficile estrarre gli ordini delle componenti AR e MA direttamente dalla PACF e dalla ACF. Si utilizza quindi `auto.arima()`, che prova una griglia di combinazioni di parametri, scegliendo quello con AIC minimo:
+
 ```{r}
-fit <- auto.arima(AirPassengers, lambda=0, trace=F)
+fit <- auto.arima(AirPassengers, lambda=0, trace=T)
 ```
 
 La regressione `fit` può essere passata a `ggplot()` **a patto di aver prima caricato la libreria `ggfortify`**:
