@@ -1,0 +1,30 @@
+# Experiment on yarn tensile strength
+# Data collected on May 23rd, 2011on testing machine ID1234
+# Temperature: 23°C, RAH 39%
+# Operator John Smith
+Run	Cotton	Strength
+14	15	7
+23	15	7
+20	15	15
+16	15	11
+21	15	9
+24	20	12
+ 7	20	17
+11	20	12
+ 8	20	18
+ 9	20	18
+17	25	14
+18	25	18
+25	25	18
+ 4	25	19
+22	25	19
+15	30	19
+ 3	30	25
+ 6	30	22
+ 1	30	19
+ 2	30	23
+13	35	7
+12	35	10
+ 5	35	11
+19	35	15
+10	35	11
